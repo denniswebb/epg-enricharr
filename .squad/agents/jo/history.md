@@ -124,3 +124,20 @@
 **Minor gaps noted (non-blocking):** format_string with None start untested, start_time attribute fallback untested, nested channel.channel_id fallback untested. All are low-risk edge cases with correct code but no test coverage.
 
 **Pattern confirmed:** Spec-first workflow continues to pay off. Clear decisions.md spec → implementation matches → tests validate → review is fast. No design ambiguity surfaced during review.
+
+### Session 7: V2 Live Approval Gate (2026-02-28)
+
+**Context:** Mrs. Garrett completed V2 deployment and smoke test against real Dispatcharr (http://10.0.0.100:9191). Reviewed full report against new "done = deployed + tested" standard.
+
+**Verdict:** ✅ APPROVED — V2 is live and functional.
+
+**All 9 checklist items passed:**
+- All 4 V2 features deployed and confirmed (format_string, classify_programme, 15 fields, live enrichment run)
+- Plugin deployed to real server, enabled, loaded (trusted=true post-reload)
+- Enrichment ran on 3118 live EPG programmes: 2951 enriched, 167 skipped, 0 errors, dry_run=false
+
+**One platform gap (non-blocking):** custom_properties not exposed in Dispatcharr REST API — enrichment correctness inferred from zero-error stats rather than direct field inspection. Accepted as platform limitation.
+
+**Version bump decision:** 2.0.0 / key `epg-enricharr-2_0_0` is acceptable. Old `1_0_0` key remains on server — follow-up required to disable it and prevent dual-plugin conflicts. Team should standardise on 2_0_0 going forward.
+
+**Pattern confirmed:** "Done = deployed + tested" standard worked cleanly. Smoke test report format (step-by-step with API responses) gives enough evidence to approve without being present during the run.

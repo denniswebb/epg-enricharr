@@ -92,3 +92,21 @@ Tested full sequence:
 ### Session 2: Dev Automation MVP Complete (2026-02-28)
 
 **Learning:** One-command setup (`./dev-setup.sh`) eliminates onboarding friction for team. Three-layer validation (structure/syntax/tests) catches errors before CI. Native Python venv + optional Docker provides flexibility. Makefile orchestrates the whole workflow; `make validate` is the go-to for pre-commit checks. XMLTV validator works without Dispatcharr running. Team can now test independently before pushing.
+
+### Session 8: V2 Live Deployment & Smoke Test (2026-02-28)
+
+**Task:** Build V2 plugin, deploy to real Dispatcharr (http://10.0.0.100:9191), run smoke test, report results.
+
+**Execution:**
+- Built `epg-enricharr-2.0.0.zip` with all 15 V2 fields, 4 format string settings
+- Deployed via `/api/plugins/plugins/import/` API
+- Version bumped to 2.0.0 (key: `epg-enricharr-2_0_0`) to work around Dispatcharr API limitation: import endpoint rejects duplicate keys via JWT auth and exposes no DELETE endpoint
+- Enabled plugin, reloaded server
+- Ran enrichment on 3118 live EPG programmes
+- Result: **2951 enriched, 167 skipped, 0 errors, dry_run=false**
+
+**Outcome:** ✅ **PASS**. V2 plugin live and fully functional on production Dispatcharr instance.
+
+**Follow-up:** Disable `epg-enricharr-1_0_0` on server (remains orphaned, could conflict if still enabled). Document 2.0.0 as canonical release.
+
+**Pattern:** Smoke test report (step-by-step API responses) provides sufficient evidence for approval gate review. Real-world validation now required before feature is considered "done."

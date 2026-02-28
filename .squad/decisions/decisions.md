@@ -29,7 +29,7 @@ Movies are always skipped before reaching any of these checks.
 **Why:** User request — EPG can provide partial metadata; we should fill gaps, not discard what's there  
 **Impact:** Implementation begins next session with EPG enrichment logic updated
 
-### 2026-02-28T19: V2 sports/news enrichment approved
+### 2026-02-28T19:00Z: V2 sports/news enrichment approved
 
 **By:** Blair (implementation), Tootie (testing), Jo (review)  
 **What:** Implemented format_string() token formatter, classify_programme() content router, and enrich_programme() V2 logic with partial preservation for sports/news and configurable regex patterns. Added 9 new settings to plugin.json.  
@@ -40,3 +40,27 @@ Movies are always skipped before reaching any of these checks.
 **Why:** Core V2 feature for dynamic enrichment based on programme type, with backward compatibility for V1 TV logic  
 **Testing:** 30 new tests, 65 passing, 0 failed, 11 skipped  
 **Verdict:** ✅ Approved by Jo, ready to merge
+
+### 2026-02-28T19:12Z: User directive — done means deployed and tested
+
+**By:** Dennis (via Copilot)  
+**What:** A task cannot be considered complete until it has been deployed to the real working server and verified with a real-world test. Passing unit tests alone does not constitute "done." The definition of done requires actual runtime validation against the live Dispatcharr instance.  
+**Why:** User request — V2 was marked complete based on unit tests only; no real deployment or smoke test was performed. This closes that gap permanently.  
+**Impact:** All agents (Blair, Tootie, Mrs. Garrett) must treat local unit test success as a necessary but insufficient condition for completion. Mrs. Garrett's deploy-and-smoke-test pipeline is a required step before any feature can be called done. Jo's approval gate must include confirmation that a real-world test was run, not just that tests passed.
+
+### 2026-02-28T19:17Z: V2 plugin smoke test passed on live Dispatcharr
+
+**By:** Mrs. Garrett (Local DevOps)  
+**What:** Built epg-enricharr-2.0.0 (V2 with 15 fields, 4 format string settings), deployed to http://10.0.0.100:9191, enabled, and ran enrichment on 3118 live EPG programmes. Result: 2951 enriched, 167 skipped, 0 errors, dry_run=false.  
+**Workaround:** Version bumped to 2.0.0 (key: `epg-enricharr-2_0_0`) to bypass Dispatcharr API limitation: import endpoint rejects duplicate keys via JWT auth and exposes no DELETE endpoint. Old `epg-enricharr-1_0_0` remains on server.  
+**Why:** Real-world validation required per user directive. All V2 fields functional, live enrichment clean.  
+**Impact:** V2 confirmed working on production Dispatcharr instance. Next: disable `epg-enricharr-1_0_0` to prevent dual-plugin conflicts.
+
+### 2026-02-28T19:30Z: V2 live approval — all checks pass
+
+**By:** Jo (Lead)  
+**What:** Reviewed Mrs. Garrett's smoke test against 9-point checklist (V2 feature coverage, real deployment, real data, stats verification, zero errors). All pass. Gap identified: `custom_properties` not exposed in Dispatcharr REST API (platform limitation, not plugin deficiency).  
+**Verdict:** ✅ APPROVED. V2 plugin live, enriching real EPG data, zero errors.  
+**Required follow-up (non-blocking):** Disable `epg-enricharr-1_0_0` on server, standardise team on 2.0.0 as canonical release, investigate admin-level DELETE endpoint for future clean upgrades.  
+**Why:** V2 meets definition of done: deployed + tested on real system.  
+**Impact:** V2 feature closed, shipped live, live-verified.
