@@ -90,3 +90,7 @@
 - Core MVP tests (TestEnrichmentPlugin) all pass: 15/15 ✅
 - Failed tests are expected — they're testing unimplemented V2 features per Jo's scope decision
 - Integration tests are skipped (waiting for Mrs. Garrett's Dispatcharr env)
+
+### Session 2: Production Readiness (2026-02-28)
+
+**Learning:** Plugin is MVP-complete: 15/15 core tests pass, dry-run mode works, bulk operations optimized. Extended test suite (34 total tests) validates roadmap; V2 features (sports enrichment) correctly deferred. Episode parsing logic is solid and handles all documented formats. Plugin ready for Dispatcharr installation and manual validation.

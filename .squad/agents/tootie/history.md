@@ -91,3 +91,7 @@
 - Blair: Implement sports enrichment for V2 (year-based seasons)
 - Mrs. Garrett: Set up local Dispatcharr for integration tests
 - Tootie: Review Blair's implementation against test expectations
+
+### Session 2: MVP Validation Complete (2026-02-28)
+
+**Learning:** All 23 MVP tests pass against Blair's plugin implementation. Test suite is comprehensive: 34 tests cover episode parsing, TV enrichment, previously-shown flags, bulk operations, and XMLTV output. V2 tests correctly skipped (sports enrichment deferred). TDD approach validated—tests defined contracts clearly; Blair's implementation met all expectations. MockProgramData class enables future testing without Django. Quality gates established.

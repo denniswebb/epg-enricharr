@@ -88,3 +88,7 @@ Tested full sequence:
 - `make lint` — Add Python linting (flake8, black) if team adopts style guide
 - `make coverage` — Generate test coverage reports
 - CI/CD hooks — Use Makefile targets in GitHub Actions workflows
+
+### Session 2: Dev Automation MVP Complete (2026-02-28)
+
+**Learning:** One-command setup (`./dev-setup.sh`) eliminates onboarding friction for team. Three-layer validation (structure/syntax/tests) catches errors before CI. Native Python venv + optional Docker provides flexibility. Makefile orchestrates the whole workflow; `make validate` is the go-to for pre-commit checks. XMLTV validator works without Dispatcharr running. Team can now test independently before pushing.

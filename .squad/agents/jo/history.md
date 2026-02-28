@@ -33,3 +33,7 @@
 - Decisions recorded before work starts = team can parallelize without blocking on me
 - Mrs. Garrett's local Dispatcharr setup is critical path — integration tests need it
 - Blair can reject scope creep using documented out-of-scope list
+
+### Session 2: Orchestration & Decision Finalization (2026-02-28)
+
+**Learning:** Clear scope decisions delivered to inbox; team executed in parallel without rework. All four agents (Blair, Tootie, Mrs. Garrett, me) completed first batch: plugin implemented, tests passing, local dev automation ready. Scope boundaries (no sports, no UI, no retroactive enrichment) prevented team from overbuilding. Next work batch can start immediately from here.
