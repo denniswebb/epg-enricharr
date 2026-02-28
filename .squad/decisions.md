@@ -552,3 +552,23 @@ Movies are always skipped before reaching any of these checks.
 **Delta:** +154 enriched programmes (sports and news items without S-E episode strings, now assigned year-based seasons and date-based episodes per V2 templates)  
 **Why:** Live validation required per user directive. Description fix prevents confusion; stats prove functionality.  
 **Impact:** V2 sports/news feature validated on production, ready for documentation refresh and user release notes.
+
+---
+
+## Session 7: V3 Planning Setup & Process Directives
+
+### 2026-02-28T21:50Z: User directive — session memory capture
+
+**By:** Dennis (via Copilot)  
+**What:** Always update `.squad/identity/now.md` with pending items at the end of every session so a fresh conversation can pick up where we left off without needing to be reminded.  
+**Why:** User request — prevent feature/context loss between sessions  
+**Impact:** All team members must treat now.md as the active session state; update it before session close.
+
+---
+
+### 2026-02-28T21:52Z: User directive — conversational planning style
+
+**By:** Dennis (via Copilot)  
+**What:** Planning sessions must be conversational and back-and-forth. No walls of text. Present findings briefly, then discuss. Let Dennis add context, prioritize, or dismiss items interactively before writing anything down.  
+**Why:** User request — captured for team memory  
+**Impact:** Planning conversations are dialogue-driven, not documentation-driven; findings stored after discussion.
