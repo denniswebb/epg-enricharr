@@ -1,6 +1,6 @@
 {
   "name": "EPG Enricharr",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Enrich EPG data for Plex DVR recognition",
   "author": "epg-enricharr-team",
   "license": "MIT",

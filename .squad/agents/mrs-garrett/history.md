@@ -199,3 +199,51 @@ See `.squad/decisions/inbox/mrs-garrett-smoke-test-gap.md` for full analysis, pr
 - Deployed a broken fix to production
 - Need to investigate the actual state of onscreen_episode on the live server and redeploy if needed
 - New smoke test standard will prevent this in future deployments
+
+---
+
+## Session: v2.0.2 Deploy — onscreen_episode CONFIRMED
+**Date:** 2026-08-29
+
+**Task:** Re-deploy Blair's `onscreen_episode` season-prefix fix as v2.0.2, this time with ACTUAL database verification per new smoke test standard.
+
+**Execution:**
+- Token in `.env` still valid (HTTP 200 check before any work)
+- Bumped `plugin.json`: `2.0.1` → `2.0.2`; built `epg-enricharr-2.0.2.zip`
+- Imported via `/api/plugins/plugins/import/` — Dispatcharr 0.19.0 now assigns key `epg-enricharr` (no version suffix, new behavior)
+- Enabled `epg-enricharr`; disabled `epg-enricharr-2_0_1`
+- Set `enable_sports_enrichment=true` and `enable_news_enrichment=true` via settings API (verified both confirmed `true` before running)
+- Reloaded plugins: `{"success":true,"count":4}`
+- Triggered enrichment: 3118 total, 3105 enriched, 13 skipped, 0 errors, dry_run=false
+
+**Actual Verification (DB Query):**
+```
+ssh root@10.0.0.100 → docker exec Dispatcharr psql -U dispatch -d dispatcharr
+Table: public.epg_programdata, column: custom_properties (jsonb)
+```
+
+Sample rows:
+```
+Friday Night Football : Wolverhampton Wanderers v Aston Villa  → S2026E02271930
+Sky Sports News                                                → S2026E02280045
+HSBC Women's World Championship LPGA Golf : Day 3             → S2026E02280130
+Gillette Labs Soccer Saturday                                  → S2026E02281000
+```
+
+Full custom_properties sample:
+```json
+{"season": 2026, "episode": "02271930", "onscreen_episode": "S2026E02271930", "previously_shown": true}
+```
+
+Format count query result:
+- total_with_onscreen: 1786
+- has_season_prefix (LIKE 'S%'): **1786**
+- bare_episode (NOT LIKE 'S%'): **0**
+
+**Outcome:** ✅ **PASS**. 1786/1786 onscreen_episode values are `S2026E...` format. Zero bare episodes. Blair's fix is confirmed working in production.
+
+**Pattern confirmed:** After any data mutation fix, always query the actual field value in the database. Stats ("0 errors") are necessary but not sufficient. The only acceptable proof is a sample row showing the correct field format.
+
+**Infrastructure note:** Dispatcharr uses PostgreSQL (not SQLite). Database is accessible via `docker exec Dispatcharr psql -U dispatch -d dispatcharr` from the Unraid host. Table is `epg_programdata`, column `custom_properties` (jsonb). Query `custom_properties->>'onscreen_episode'` to inspect field value.
+
+**Dispatcharr 0.19.0 key behavior change:** Plugin keys no longer include version suffix. `epg-enricharr-2.0.2.zip` imports as key `epg-enricharr`, not `epg-enricharr-2_0_2`. Future deploys should target key `epg-enricharr`.
