@@ -30,8 +30,11 @@ class Plugin:
         self.enabled = self.config.get('enabled', True)
         self.enable_tv_enrichment = self.config.get('enable_tv_enrichment', True)
         self.enable_sports_enrichment = self.config.get('enable_sports_enrichment', False)
-        self.tv_categories = self.config.get('tv_categories', ['Movies', 'Series', 'Sports'])
-        self.sports_categories = self.config.get('sports_categories', [])
+        # Dispatcharr passes settings as comma-separated strings from the UI
+        tv_cats = self.config.get('tv_categories', 'Movies,Series,Sports')
+        self.tv_categories = [c.strip() for c in tv_cats.split(',')] if isinstance(tv_cats, str) else list(tv_cats or [])
+        sports_cats = self.config.get('sports_categories', '')
+        self.sports_categories = [c.strip() for c in sports_cats.split(',') if c.strip()] if isinstance(sports_cats, str) else list(sports_cats or [])
         self.auto_mark_previously_shown = self.config.get('auto_mark_previously_shown', True)
         self.dry_run_mode = self.config.get('dry_run_mode', False)
     
@@ -81,7 +84,7 @@ class Plugin:
             return False
         
         custom_props = programme_data.custom_properties or {}
-        categories = custom_props.get('category', [])
+        categories = custom_props.get('categories', [])
         
         # Check if any category matches TV categories
         if isinstance(categories, list):
@@ -140,6 +143,11 @@ class Plugin:
             Result dictionary with status and metrics
         """
         logger.info(f"🔥 EPG-Enricharr.run() called with action='{action}'")
+
+        # Apply settings from Dispatcharr context (plugin is instantiated without config at load time)
+        settings = context.get('settings', {})
+        if settings:
+            self.__init__(config=settings)
         
         if not self.enabled:
             logger.info("Plugin disabled, skipping")
