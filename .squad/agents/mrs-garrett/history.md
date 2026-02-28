@@ -110,3 +110,25 @@ Tested full sequence:
 **Follow-up:** Disable `epg-enricharr-1_0_0` on server (remains orphaned, could conflict if still enabled). Document 2.0.0 as canonical release.
 
 **Pattern:** Smoke test report (step-by-step API responses) provides sufficient evidence for approval gate review. Real-world validation now required before feature is considered "done."
+
+---
+
+## Session: V2 Sports/News Enrichment Smoke Test
+**Date:** 2026-02-28
+
+**Task:** Enable `enable_sports_enrichment` and `enable_news_enrichment` on live server, re-run enrichment, verify V2 logic fires.
+
+**Key findings:**
+- Settings write API requires `POST /api/plugins/plugins/{key}/settings/` with `{"settings": {...}}` wrapper — flat JSON is silently ignored
+- `GET/PUT/PATCH` all return 405 on the settings endpoint
+
+**Enrichment stats comparison:**
+| Config | enriched | skipped |
+|--------|----------|---------|
+| TV-only | 2951 | 167 |
+| TV+Sports+News (V2) | 3105 | 13 |
+| **Delta** | **+154** | **-154** |
+
+**Outcome:** ✅ **PASS**. 154 additional programmes (sports + news) enriched by V2 logic. 0 errors. Server left with both V2 flags enabled.
+
+**Note:** `custom_properties` (where season/episode is written) is not exposed in `/api/epg/programs/` REST response — stat delta is the verification method.

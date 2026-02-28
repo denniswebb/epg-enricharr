@@ -214,3 +214,23 @@
 
 **Technique used for dry-run tests:**
 Mocked Django model imports using `unittest.mock.patch.dict(sys.modules, ...)` since `from apps.epg.models import ProgramData` is a late import inside `_enrich_all_programmes()`. This lets unit tests validate DB write behavior without a running Dispatcharr instance.
+
+### Session 6: onscreen_episode Coverage for Sports/News Generated Path
+
+**Bug context:** V2 sports/news generated (else) branch wasn't writing `onscreen_episode` to `custom_properties`, so the season wasn't visible in display. Blair fixed this by adding `onscreen_episode` generation in the else branches for both sports and news.
+
+**What was added (4 new tests in `TestEnrichProgrammeV2`, all passing):**
+
+1. `test_sports_generated_path_writes_onscreen_episode` — when sports has no existing season/episode, `changes['onscreen_episode']` is non-empty and contains '2026' (the season year)
+2. `test_news_generated_path_writes_onscreen_episode` — same for news generated path
+3. `test_sports_existing_epg_preserves_onscreen_episode` — when both season+episode exist in EPG data, the existing `onscreen_episode` ('S2025E01011500') is preserved unchanged; season/episode returned as 2025/'01011500' (not regenerated to 2026)
+4. `test_sports_season_format_failure_writes_episode_no_crash` — when `sports_season_format` produces non-int value (e.g., '{hh}:{mm}' → '19:30'), no crash; `season` not in changes; `episode` IS in changes; `onscreen_episode` if present is non-empty
+
+**Blair's fix already landed:** plugin.py lines 208-211 (sports) and 226-229 (news) write `onscreen_episode` as `f"S{season}E{episode}"` when season is available, or just `episode` string if season int-conversion failed. Tests confirmed this behavior is correct.
+
+**Final test counts: 67 passed, 2 pre-existing unrelated failures (version string tests), 11 skipped**
+
+**onscreen_episode format confirmed:**
+- Generated with season: `f"S{changes['season']}E{changes['episode']}"` e.g. "S2026E0315193042"
+- Generated without season (int-conversion failed): just the episode string e.g. "03151930"
+- Existing EPG path (both present): `onscreen_episode` not touched in `changes` dict

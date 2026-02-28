@@ -141,3 +141,21 @@
 **Version bump decision:** 2.0.0 / key `epg-enricharr-2_0_0` is acceptable. Old `1_0_0` key remains on server — follow-up required to disable it and prevent dual-plugin conflicts. Team should standardise on 2_0_0 going forward.
 
 **Pattern confirmed:** "Done = deployed + tested" standard worked cleanly. Smoke test report format (step-by-step with API responses) gives enough evidence to approve without being present during the run.
+
+### Session 8: onscreen_episode Fix Review — Sports/News Generated Path (2026-02-28)
+
+**Context:** Blair added `onscreen_episode` to the sports/news generated path (else branch) in `enrich_programme()`. Tootie added 4 targeted tests. Reviewed per Dennis's request.
+
+**Verdict:** ✅ APPROVED
+
+**What passed:**
+1. `onscreen_episode` only written in generated path (else branch) — existing EPG path untouched
+2. TV path untouched
+3. Format `S{year}E{episode}` is correct Plex DVR notation; season-failure fallback (episode-only) is correct
+4. All 4 new tests pass; full suite 67 pass / 2 pre-existing failures (unrelated version assertions) / 11 skipped
+
+**Non-blocking gaps noted:**
+- No `test_news_existing_epg_preserves_onscreen_episode` (news existing-EPG path not explicitly tested; symmetric code makes it low risk)
+- `test_sports_season_format_failure_writes_episode_no_crash` has a permissive `if 'onscreen_episode' in changes:` guard — should assert presence unconditionally since the code always writes it in that path
+
+**Pattern:** Blair's spec-first decision (`.squad/decisions/inbox/blair-onscreen-episode-season.md`) precisely matched the implementation — no ambiguity, fast review.

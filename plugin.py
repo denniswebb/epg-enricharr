@@ -205,6 +205,10 @@ class Plugin:
                 except (ValueError, TypeError):
                     pass
                 changes['episode'] = self.format_string(self.sports_episode_format, programme_data)
+                if 'season' in changes:
+                    changes['onscreen_episode'] = f"S{changes['season']}E{changes['episode']}"
+                else:
+                    changes['onscreen_episode'] = changes['episode']
 
         # News enrichment
         elif content_type == 'news' and self.enable_news_enrichment:
@@ -219,6 +223,10 @@ class Plugin:
                 except (ValueError, TypeError):
                     pass
                 changes['episode'] = self.format_string(self.news_episode_format, programme_data)
+                if 'season' in changes:
+                    changes['onscreen_episode'] = f"S{changes['season']}E{changes['episode']}"
+                else:
+                    changes['onscreen_episode'] = changes['episode']
 
         # TV show enrichment: Parse onscreen_episode
         elif content_type == 'tv' and self.should_enrich_tv(programme_data):

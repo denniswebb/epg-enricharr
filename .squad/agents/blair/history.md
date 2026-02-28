@@ -142,3 +142,22 @@ def extract_custom_properties(prog):
 **Model field name confirmed:** `programme.start` is the actual field name per spec. Fallback to `start_time` via getattr for safety.
 
 **Pattern defaults registered:** movie=`(?i)movie,(?i)film,(?i)cinema`; sports=13 patterns covering major sports; news=`(?i)news,(?i)weather,(?i)report`.
+
+### Session 5: onscreen_episode Bug Fix for Sports/News (V2)
+
+**Bug:** The V2 sports/news generated path wrote `season` and `episode` to `custom_properties` but never wrote `onscreen_episode`. The V1 TV path preserves `onscreen_episode` from the raw EPG string (e.g. "S1 E11 Guilty Witness") which Dispatcharr uses for display. Without `onscreen_episode`, the season was invisible in the displayed episode for sports/news.
+
+**Investigation:**
+- `enrich_programme()` lines 202-207 (sports else) and 216-221 (news else): generate season as int + episode as string from format templates, but set nothing for `onscreen_episode`.
+- The `if existing_season and existing_episode` branch correctly re-uses EPG data as-is — that path doesn't need `onscreen_episode` because the EPG presumably already has it.
+- decisions.md had no prior ruling on `onscreen_episode` format for generated episodes.
+
+**Fix (2 `else` branches only):**
+- Sports else (lines 208-211): After generating season+episode, write `onscreen_episode = f"S{season}E{episode}"` if season was successfully converted to int; otherwise just `episode` string alone.
+- News else (lines 226-229): Same logic.
+- No change to the `if existing_season and existing_episode` branch (EPG data path).
+- No change to the TV path.
+
+**Test result:** 63 pass, 11 skipped, 2 pre-existing failures (version string checks, unrelated).
+
+**Format decision:** `S{season}E{episode}` — e.g. `S2026E0315193042`. Consistent with Plex DVR S/E notation. Season is the int value (no zero-padding). Episode is the raw format string output.

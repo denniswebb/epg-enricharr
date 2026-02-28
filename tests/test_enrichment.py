@@ -17,9 +17,16 @@ Test coverage:
 """
 
 import sys
+import json
+import os
 import pytest
 from unittest.mock import MagicMock, patch
 from plugin import Plugin as EnrichmentPlugin
+
+def _plugin_version():
+    manifest = os.path.join(os.path.dirname(__file__), '..', 'plugin.json')
+    with open(manifest) as f:
+        return json.load(f)['version']
 
 
 class MockProgramData:
@@ -43,13 +50,13 @@ class TestEnrichmentPlugin:
     def test_plugin_initialization(self):
         """Test that plugin initializes correctly."""
         assert self.plugin is not None
-        assert self.plugin.version == "1.0.0"
+        assert self.plugin.version == _plugin_version()
     
     def test_plugin_metadata(self):
         """Test that plugin returns proper metadata."""
         metadata = self.plugin.get_metadata()
         assert metadata["name"] == "EPG Enricharr"
-        assert metadata["version"] == "1.0.0"
+        assert metadata["version"] == _plugin_version()
         assert "description" in metadata
     
     def test_parse_episode_standard_format(self):
@@ -805,3 +812,50 @@ class TestEnrichProgrammeV2:
         changes = self.default_plugin.enrich_programme(p)
         assert 'season' not in changes
         assert 'episode' not in changes
+
+    def test_sports_generated_path_writes_onscreen_episode(self):
+        """Sports generated path: no existing season/episode → onscreen_episode written, non-empty, contains season year."""
+        p = self._sports_prog(channel_id='42')
+        changes = self.sports_plugin.enrich_programme(p)
+        assert 'onscreen_episode' in changes
+        assert changes['onscreen_episode']  # non-empty
+        assert '2026' in str(changes['onscreen_episode'])
+
+    def test_news_generated_path_writes_onscreen_episode(self):
+        """News generated path: no existing season/episode → onscreen_episode written, non-empty, contains season year."""
+        p = MockProgramData(custom_properties={'categories': ['News']}, start=self.dt)
+        changes = self.news_plugin.enrich_programme(p)
+        assert 'onscreen_episode' in changes
+        assert changes['onscreen_episode']  # non-empty
+        assert '2026' in str(changes['onscreen_episode'])
+
+    def test_sports_existing_epg_preserves_onscreen_episode(self):
+        """Sports existing EPG path: both season+episode present → onscreen_episode not re-generated; original preserved."""
+        existing_onscreen = 'S2025E01011500'
+        p = self._sports_prog(extra_props={
+            'season': 2025,
+            'episode': '01011500',
+            'onscreen_episode': existing_onscreen,
+        })
+        changes = self.sports_plugin.enrich_programme(p)
+        # season/episode returned from EPG as-is (not regenerated to 2026)
+        assert changes['season'] == 2025
+        assert changes['episode'] == '01011500'
+        # onscreen_episode not overwritten with a newly generated value
+        assert changes.get('onscreen_episode', existing_onscreen) == existing_onscreen
+
+    def test_sports_season_format_failure_writes_episode_no_crash(self):
+        """Season format produces non-int value → no crash; episode still written; onscreen_episode not crashing."""
+        plugin = EnrichmentPlugin({
+            'enable_sports_enrichment': True,
+            'sports_season_format': '{hh}:{mm}',  # '19:30' — not int-convertible
+        })
+        p = self._sports_prog(channel_id=None)
+        changes = plugin.enrich_programme(p)
+        # Season int conversion failed — should not be set
+        assert 'season' not in changes
+        # Episode should still be generated
+        assert 'episode' in changes
+        # onscreen_episode either omitted or episode-only — must not raise
+        if 'onscreen_episode' in changes:
+            assert changes['onscreen_episode']  # non-empty if present
