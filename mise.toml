@@ -35,7 +35,7 @@ echo "✅ Development environment ready"
 description = "Remove build artifacts"
 run = """
 echo "Cleaning build artifacts..."
-rm -rf ./build epg-enricharr-1.0.0.zip
+rm -rf ./build epg-enricharr-1.0.0.zip epg-enricharr-2.0.0.zip
 echo "✅ Clean complete"
 """
 
@@ -43,7 +43,7 @@ echo "✅ Clean complete"
 description = "Generate plugin zip package"
 depends = ["clean"]
 run = """
-VERSION=1.0.0
+VERSION=2.0.0
 PLUGIN_NAME=epg-enricharr
 BUILD_DIR=./build
 
@@ -65,7 +65,7 @@ echo "✅ Plugin zip created: $PLUGIN_NAME-$VERSION.zip"
 description = "Validate plugin zip structure and tests"
 run = """
 echo "Validating plugin..."
-python3 validation.py epg-enricharr-1.0.0.zip
+python3 validation.py epg-enricharr-2.0.0.zip
 """
 
 [tasks.setup-dispatcharr]

@@ -19,7 +19,7 @@
     "dispatcharr": ">=1.0.0",
     "python": ">=3.8"
   },
-  "entry_point": "plugin.EnrichmentPlugin",
+  "entry_point": "plugin.Plugin",
   "fields": [
     {
       "id": "enabled",
@@ -73,9 +73,10 @@
   ],
   "actions": [
     {
-      "id": "enrich_all",
-      "label": "Enrich All EPG",
-      "description": "Run enrichment on all programmes in the database"
+      "id": "enrich_on_epg_refresh",
+      "label": "Enrich EPG on Refresh",
+      "description": "Automatically enrich EPG data when it refreshes",
+      "events": ["epg_refresh"]
     }
   ]
 }

@@ -28,10 +28,6 @@ fi
 
 # Find latest ZIP file
 ZIP_FILE=$(ls -t epg-enricharr-*.zip 2>/dev/null | head -1)
-if [ -z "$ZIP_FILE" ]; then
-    echo "❌ No plugin ZIP found. Run 'mise run test-zip' first"
-    exit 1
-fi
 
 echo "📦 Found plugin: $ZIP_FILE"
 echo "🌐 Target: $DISPATCHARR_HOST"

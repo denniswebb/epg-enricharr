@@ -17,6 +17,46 @@
 
 ## Learnings
 
+### Session 5: V2 Test Suite Added (Current)
+
+**What was added (30 new tests, all passing):**
+
+`TestFormatString` (12 tests):
+- All 7 tokens validated against fixed datetime `datetime(2026, 3, 15, 19, 30)`: `{YYYY}`→'2026', `{YY}`→'26', `{MM}`→'03', `{DD}`→'15', `{hh}`→'19', `{mm}`→'30'
+- `{channel}` with numeric channel_id → included; with non-numeric (e.g. 'ESPN') → silently omitted; with None → silently omitted
+- Combined template `{MM}{DD}{hh}{mm}{channel}` with numeric channel → correct concatenation (e.g. '0315193042')
+- Combined template with non-numeric channel → no channel suffix ('03151930')
+- Default `sports_episode_format` with single-digit numeric channel → '031519307'
+
+`TestClassifyProgramme` (9 tests):
+- 'Movie' → 'movie', 'Film' → 'movie', 'Sports' → 'sports', 'News' → 'news', 'Series' → 'tv'
+- No categories → 'tv' (fallback)
+- Movie takes precedence over sports (both present → 'movie')
+- Custom regex `(?i)kino` in movie_patterns config → 'Kino' category classifies as 'movie'
+- Invalid regex `[invalid` → warning logged, pattern skipped, classify_programme returns valid result without crashing
+
+`TestEnrichProgrammeV2` (9 tests):
+- Movie → `enrich_programme()` returns `{}` (early return, no previously_shown)
+- Sports with BOTH existing season+episode → returned as-is, not regenerated
+- Sports with NEITHER → generates season from `{YYYY}` and episode from `{MM}{DD}{hh}{mm}{channel}`
+- Sports with only season (no episode) → regenerates BOTH from format strings (existing season overwritten)
+- Sports with only episode (no season) → regenerates BOTH from format strings
+- News with `enable_news_enrichment=True` → season=year int, episode=`{MM}{DD}`
+- TV with `categories: ['Series']` and `onscreen_episode` → V1 parse_episode_string path
+- `enable_sports_enrichment=False` (default) → no season/episode set for sports
+- `enable_news_enrichment=False` (default) → no season/episode set for news
+
+**Final test counts: 65 passed, 11 skipped, 0 failed**
+
+**Key implementation details confirmed by tests:**
+- `format_string()` reads from `programme.start` attribute (not `custom_properties`)
+- `classify_programme()` reads from `programme.custom_properties['categories']`
+- When only one of season/episode exists, the `if existing_season and existing_episode` guard fails → BOTH are regenerated from format strings
+- Movie early-return happens before `previously_shown` logic → movies return `{}`
+- `{channel}` uses `str(channel_id).isdigit()` test — integer or numeric string passes, alpha fails silently
+
+**MockProgramData updated** to add `start=None` and `channel_id=None` defaults — all 35 existing tests unaffected.
+
 ### Session 1: Test Suite Creation (Feb 28, 2026)
 
 **Test Strategy:**

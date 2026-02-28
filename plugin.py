@@ -15,7 +15,7 @@ class Plugin:
     """Dispatcharr plugin to enrich EPG custom_properties with season/episode metadata."""
     
     name = "EPG Enricharr"
-    version = "1.0.0"
+    version = "2.0.0"
     description = "Enrich EPG data for Plex DVR recognition"
     
     # Episode format patterns

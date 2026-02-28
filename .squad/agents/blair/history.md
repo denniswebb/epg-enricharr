@@ -120,3 +120,25 @@ def extract_custom_properties(prog):
 - Session 1 history note said `custom_properties.category` (singular) — that was an error in my own notes. The real Dispatcharr API uses plural. History corrected here.
 
 **Confirmed field name:** `categories` (plural) is the correct and official Dispatcharr field name for storing custom_properties list of category names. This is the definitive reference for any future development.
+
+### Session 4: V2 Sports/News Enrichment (2026-02-28)
+
+**What was implemented:**
+
+1. **`format_string(template, programme)`** — Token formatter resolving 7 tokens: `{YYYY}`, `{YY}`, `{MM}`, `{DD}`, `{hh}`, `{mm}`, `{channel}`. Uses `programme.start` (falls back to `programme.start_time` via getattr). Channel token silently omitted if `channel_id` is non-numeric (uses `programme.channel_id` FK first, then `programme.channel.channel_id`).
+
+2. **`classify_programme(programme)`** — Returns `'movie'`, `'sports'`, `'news'`, or `'tv'`. Matches compiled regex patterns against joined categories + title. Precedence: movie → sports → news → tv.
+
+3. **Updated `enrich_programme()`** — Now classifies before enriching. Movies return `{}` immediately. Sports/news use format string templates when `enable_sports_enrichment`/`enable_news_enrichment` is True. If both season+episode already exist in custom_properties (not None, not 0), uses them as-is. TV path unchanged.
+
+4. **7 new plugin.json fields:** `enable_news_enrichment`, `sports_season_format`, `sports_episode_format`, `news_season_format`, `news_episode_format`, `movie_patterns`, `sports_patterns`, `news_patterns`.
+
+**Key decisions:**
+- `_parse_patterns()` is a closure inside `__init__` (not a method) — spec's pattern, keeps it encapsulated.
+- Season from format_string cast to `int()` with try/except — episode stays as string.
+- Movies get no `previously_shown` flag (early return with `{}`); all other types do.
+- Existing 35 passing tests remain 35 passing, 11 skipped — zero regression.
+
+**Model field name confirmed:** `programme.start` is the actual field name per spec. Fallback to `start_time` via getattr for safety.
+
+**Pattern defaults registered:** movie=`(?i)movie,(?i)film,(?i)cinema`; sports=13 patterns covering major sports; news=`(?i)news,(?i)weather,(?i)report`.

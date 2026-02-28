@@ -107,3 +107,20 @@
 **Plugin.json Limitation:** Only `text` and `boolean` types supported. Format strings work fine as text fields with good description strings explaining tokens.
 
 **Spec delivered:** `.squad/decisions/inbox/jo-v2-token-system-design.md` — Blair can implement directly without further design discussion.
+
+### Session 6: V2 Implementation Review (2025-07-22)
+
+**Context:** Blair implemented 4 V2 features (format_string, classify_programme, enrichment routing, plugin.json settings). Tootie wrote 30 V2 tests across 3 test classes.
+
+**Review Outcome:** ✅ APPROVED. All 5 review criteria passed. 65 tests passing, 0 failures.
+
+**Key Observations:**
+1. Token system is clean — pure string replacement, no DSL complexity. All 7 tokens resolve correctly.
+2. Content classification with regex patterns is well-implemented — graceful invalid regex handling, correct precedence order.
+3. Enrichment routing respects the "both exist → use as-is, missing → generate" rule from Dennis's directive.
+4. V1 TV path (parse_episode_string) completely preserved — no regressions.
+5. Feature flags (enable_sports_enrichment, enable_news_enrichment) properly gate their respective code paths.
+
+**Minor gaps noted (non-blocking):** format_string with None start untested, start_time attribute fallback untested, nested channel.channel_id fallback untested. All are low-risk edge cases with correct code but no test coverage.
+
+**Pattern confirmed:** Spec-first workflow continues to pay off. Clear decisions.md spec → implementation matches → tests validate → review is fast. No design ambiguity surfaced during review.

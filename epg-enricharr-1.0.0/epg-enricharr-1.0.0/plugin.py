@@ -11,7 +11,7 @@ from typing import Optional, Tuple, Dict, Any
 logger = logging.getLogger(__name__)
 
 
-class EnrichmentPlugin:
+class Plugin:
     """Dispatcharr plugin to enrich EPG custom_properties with season/episode metadata."""
     
     name = "EPG Enricharr"
@@ -30,8 +30,11 @@ class EnrichmentPlugin:
         self.enabled = self.config.get('enabled', True)
         self.enable_tv_enrichment = self.config.get('enable_tv_enrichment', True)
         self.enable_sports_enrichment = self.config.get('enable_sports_enrichment', False)
-        self.tv_categories = self.config.get('tv_categories', ['Movies', 'Series', 'Sports'])
-        self.sports_categories = self.config.get('sports_categories', [])
+        # Dispatcharr passes settings as comma-separated strings from the UI
+        tv_cats = self.config.get('tv_categories', 'Movies,Series,Sports')
+        self.tv_categories = [c.strip() for c in tv_cats.split(',')] if isinstance(tv_cats, str) else list(tv_cats or [])
+        sports_cats = self.config.get('sports_categories', '')
+        self.sports_categories = [c.strip() for c in sports_cats.split(',') if c.strip()] if isinstance(sports_cats, str) else list(sports_cats or [])
         self.auto_mark_previously_shown = self.config.get('auto_mark_previously_shown', True)
         self.dry_run_mode = self.config.get('dry_run_mode', False)
     
@@ -81,7 +84,7 @@ class EnrichmentPlugin:
             return False
         
         custom_props = programme_data.custom_properties or {}
-        categories = custom_props.get('category', [])
+        categories = custom_props.get('categories', [])
         
         # Check if any category matches TV categories
         if isinstance(categories, list):
@@ -139,15 +142,25 @@ class EnrichmentPlugin:
         Returns:
             Result dictionary with status and metrics
         """
+        logger.info(f"🔥 EPG-Enricharr.run() called with action='{action}'")
+
+        # Apply settings from Dispatcharr context (plugin is instantiated without config at load time)
+        settings = context.get('settings', {})
+        if settings:
+            self.__init__(config=settings)
+        
         if not self.enabled:
+            logger.info("Plugin disabled, skipping")
             return {
                 'status': 'skipped',
                 'message': 'Plugin is disabled'
             }
         
-        if action == 'enrich_all':
+        if action in ('enrich_all', 'enrich_on_epg_refresh'):
+            logger.info(f"Running enrichment for action '{action}'...")
             return self._enrich_all_programmes(context)
         
+        logger.warning(f"Unknown action: {action}")
         return {
             'status': 'error',
             'message': f'Unknown action: {action}'
@@ -164,6 +177,7 @@ class EnrichmentPlugin:
             Result with enrichment statistics
         """
         log = context.get('logger', logger)
+        log.info("🎯 Starting EPG enrichment...")
         
         try:
             # Import Django models (late import to avoid issues in tests)
@@ -225,7 +239,7 @@ class EnrichmentPlugin:
                     'stats': stats
                 }
         
-        log.info(f"Enrichment complete: {stats}")
+        log.info(f"✅ Enrichment complete: {stats}")
         
         return {
             'status': 'ok',
@@ -240,3 +254,9 @@ class EnrichmentPlugin:
             "version": self.version,
             "description": self.description
         }
+
+
+# Module-level initialization for Dispatcharr plugin loader
+def get_plugin(config=None):
+    """Factory function for plugin instantiation."""
+    return Plugin(config)
