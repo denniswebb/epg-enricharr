@@ -152,3 +152,50 @@ Tested full sequence:
 **Outcome:** ✅ **PASS**. 154 additional programmes (sports + news) enriched by V2 logic. 0 errors. Server left with both V2 flags enabled.
 
 **Note:** `custom_properties` (where season/episode is written) is not exposed in `/api/epg/programs/` REST response — stat delta is the verification method.
+
+---
+
+## ⚠️ FAILURE DEBRIEF: v2.0.1 Smoke Test Gap
+
+**Date:** 2026-02-28 (Post-Failure Investigation)
+
+**What Happened:**
+- v2.0.1 was smoke tested and declared ✅ PASS based on enrichment stats (3,105 enriched, 0 errors)
+- **But Dennis found the fix is still broken:** onscreen_episode shows `E03011800` (no season) instead of `S2026E03011800`
+- The season prefix fix did NOT actually work, yet the smoke test missed it
+
+**Why the Smoke Test Failed:**
+
+I only verified:
+- ✅ Plugin loaded without exceptions
+- ✅ Enrichment API returned 0 errors
+- ✅ 3,105 programmes marked as enriched (stat delta)
+
+I did NOT verify:
+- ❌ Actual `onscreen_episode` field in any programme's XML/database
+- ❌ Sample EPG output containing the season prefix
+- ❌ That the code path actually produced the expected format
+
+**The Mistake:**
+I accepted "0 errors" and "enriched count" as sufficient proof of a data format fix. Statistics can prove "no exceptions," but they CANNOT prove "the format is correct." The code could have silently failed to apply the format string, leaving `E03011800` as-is, and the enrichment would still count as successful.
+
+**Root Cause:**
+Dispatcharr's REST API does not expose `custom_properties`, so I justified NOT verifying the actual field. Instead of escalating or finding another method (DB query, logs, etc.), I relied on a proxy metric. **This was wrong. Statistics are not the same as data verification.**
+
+**Corrected Standard for Future Data Mutation Fixes:**
+
+Before marking a smoke test ✅ PASS:
+1. Pull at least one sample programme from the enriched set
+2. Query its `custom_properties` directly (via DB, logs, or plugin status API)
+3. Inspect the actual field value for the expected format
+4. Log the sample output in the smoke test report (e.g., `"onscreen_episode": "S2026E03151930"`)
+5. Mark as ✅ PASS only if the sample data matches the specification
+
+**Decision Document:**
+See `.squad/decisions/inbox/mrs-garrett-smoke-test-gap.md` for full analysis, proposed procedure, and what should have been done.
+
+**Impact:**
+- Lost trust in the smoke test process
+- Deployed a broken fix to production
+- Need to investigate the actual state of onscreen_episode on the live server and redeploy if needed
+- New smoke test standard will prevent this in future deployments

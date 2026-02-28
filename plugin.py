@@ -4,18 +4,28 @@ Enriches EPG data to improve Plex DVR recognition
 """
 
 import re
+import json
+import os
 import logging
 from typing import Optional, Tuple, Dict, Any
 
 
 logger = logging.getLogger(__name__)
 
+def _read_manifest_version() -> str:
+    manifest = os.path.join(os.path.dirname(__file__), 'plugin.json')
+    try:
+        with open(manifest) as f:
+            return json.load(f).get('version', '0.0.0')
+    except Exception:
+        return '0.0.0'
+
 
 class Plugin:
     """Dispatcharr plugin to enrich EPG custom_properties with season/episode metadata."""
     
     name = "EPG Enricharr"
-    version = "2.0.0"
+    version = _read_manifest_version()
     description = "Enrich EPG data for Plex DVR recognition"
     
     # Episode format patterns
@@ -199,6 +209,8 @@ class Plugin:
             if existing_season and existing_episode:
                 changes['season'] = existing_season
                 changes['episode'] = existing_episode
+                if not custom_props.get('onscreen_episode'):
+                    changes['onscreen_episode'] = f"S{existing_season}E{existing_episode}"
             else:
                 try:
                     changes['season'] = int(self.format_string(self.sports_season_format, programme_data))
@@ -217,6 +229,8 @@ class Plugin:
             if existing_season and existing_episode:
                 changes['season'] = existing_season
                 changes['episode'] = existing_episode
+                if not custom_props.get('onscreen_episode'):
+                    changes['onscreen_episode'] = f"S{existing_season}E{existing_episode}"
             else:
                 try:
                     changes['season'] = int(self.format_string(self.news_season_format, programme_data))

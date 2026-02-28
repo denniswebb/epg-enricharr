@@ -161,3 +161,41 @@ def extract_custom_properties(prog):
 **Test result:** 63 pass, 11 skipped, 2 pre-existing failures (version string checks, unrelated).
 
 **Format decision:** `S{season}E{episode}` — e.g. `S2026E0315193042`. Consistent with Plex DVR S/E notation. Season is the int value (no zero-padding). Episode is the raw format string output.
+
+### Session 6: onscreen_episode Dead Zone — Diagnosis (2026-03-01)
+
+**Bug reported:** Live EPG shows `<episode-num system="onscreen">E03011800</episode-num>` — missing season prefix. Expected: `S2026E03011800`.
+
+**Investigation:**
+
+1. **Fix IS in plugin.py** — lines 208–211 (sports) and 226–229 (news) correctly write `onscreen_episode = f"S{season}E{episode}"`.
+
+2. **Dispatcharr confirmed** (`apps/output/views.py`): Reads `custom_data["onscreen_episode"]` verbatim for the onscreen XML tag. Falls back to `E{episode}` (no season) if `onscreen_episode` key is absent. This explains the symptom exactly.
+
+3. **Root cause:** The fix only lives in the `else` branch (new generation). The `if existing_season and existing_episode` branch (lines 199–201 sports, 217–219 news) copies season+episode to `changes` but NEVER sets `onscreen_episode`. Programmes already enriched before the fix had season+episode but no `onscreen_episode`. On re-run, they hit the `if existing` branch and never reach the `else` where `onscreen_episode` is built. They are permanently stuck.
+
+4. **xmltv_ns works** because Dispatcharr builds it directly from `season` and `episode` integer math — no `onscreen_episode` key required. That's why season appeared in xmltv_ns but not onscreen.
+
+**Required fix:**
+Add `if not custom_props.get('onscreen_episode'): changes['onscreen_episode'] = f"S{existing_season}E{existing_episode}"` to both `if existing_season and existing_episode` branches (sports and news).
+
+**Diagnosis written to:** `.squad/decisions/inbox/blair-onscreen-diagnosis.md`
+
+### Session 7: onscreen_episode `if existing` Branch Fix (2026-03-01)
+
+**Fix applied:** Added `onscreen_episode` generation to both `if existing_season and existing_episode` branches (sports and news) in `enrich_programme()`.
+
+**Pattern added to sports branch (was lines 199–201, now 199–203) and news branch (was lines 217–219, now 217–221):**
+```python
+if existing_season and existing_episode:
+    changes['season'] = existing_season
+    changes['episode'] = existing_episode
+    if not custom_props.get('onscreen_episode'):
+        changes['onscreen_episode'] = f"S{existing_season}E{existing_episode}"
+```
+
+**Guard:** `if not custom_props.get('onscreen_episode')` prevents overwriting a correctly-set value from a prior run.
+
+**Test result:** 67 pass, 11 skipped, 2 pre-existing failures (version string `2.0.0` vs `2.0.1`, unrelated to this fix). Zero regression.
+
+**Decision file written to:** `.squad/decisions/inbox/blair-existing-branch-fix.md`

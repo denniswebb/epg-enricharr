@@ -859,3 +859,41 @@ class TestEnrichProgrammeV2:
         # onscreen_episode either omitted or episode-only — must not raise
         if 'onscreen_episode' in changes:
             assert changes['onscreen_episode']  # non-empty if present
+
+    def test_sports_existing_epg_no_onscreen_episode_gets_written(self):
+        """Regression: sports with existing season+episode but NO onscreen_episode →
+        onscreen_episode must be written as S{season}E{episode}."""
+        p = self._sports_prog(extra_props={'season': 2026, 'episode': '03011800'})
+        changes = self.sports_plugin.enrich_programme(p)
+        assert changes['season'] == 2026
+        assert changes['episode'] == '03011800'
+        assert 'onscreen_episode' in changes
+        assert changes['onscreen_episode'] == 'S2026E03011800'
+
+    def test_news_existing_epg_no_onscreen_episode_gets_written(self):
+        """Regression: news with existing season+episode but NO onscreen_episode →
+        onscreen_episode must be written as S{season}E{episode}."""
+        p = MockProgramData(
+            custom_properties={'categories': ['News'], 'season': 2026, 'episode': '0301'},
+            start=self.dt,
+        )
+        changes = self.news_plugin.enrich_programme(p)
+        assert changes['season'] == 2026
+        assert changes['episode'] == '0301'
+        assert 'onscreen_episode' in changes
+        assert changes['onscreen_episode'] == 'S2026E0301'
+
+    def test_sports_existing_epg_with_onscreen_episode_not_overwritten(self):
+        """When sports programme already has season+episode+onscreen_episode,
+        the existing onscreen_episode must NOT be overwritten."""
+        existing_onscreen = 'S2026E03011800'
+        p = self._sports_prog(extra_props={
+            'season': 2026,
+            'episode': '03011800',
+            'onscreen_episode': existing_onscreen,
+        })
+        changes = self.sports_plugin.enrich_programme(p)
+        assert changes['season'] == 2026
+        assert changes['episode'] == '03011800'
+        # onscreen_episode must not appear in changes (already set, no overwrite needed)
+        assert changes.get('onscreen_episode', existing_onscreen) == existing_onscreen

@@ -234,3 +234,21 @@ Mocked Django model imports using `unittest.mock.patch.dict(sys.modules, ...)` s
 - Generated with season: `f"S{changes['season']}E{changes['episode']}"` e.g. "S2026E0315193042"
 - Generated without season (int-conversion failed): just the episode string e.g. "03151930"
 - Existing EPG path (both present): `onscreen_episode` not touched in `changes` dict
+
+### Session 7: Regression Tests for onscreen_episode on Existing EPG Path (Current)
+
+**Bug:** `if existing_season and existing_episode` branch (sports + news) never wrote `onscreen_episode`. Programmes already in DB with season+episode were re-enriched every run but accumulated `E03011800` instead of `S2026E03011800`. Blair fixed it (plugin.py lines 202-203 for sports, 222-223 for news).
+
+**Three regression tests added to `TestEnrichProgrammeV2`:**
+
+1. `test_sports_existing_epg_no_onscreen_episode_gets_written` — programme has `season=2026`, `episode='03011800'` but NO `onscreen_episode` → `changes['onscreen_episode'] == 'S2026E03011800'`
+2. `test_news_existing_epg_no_onscreen_episode_gets_written` — same for news (`season=2026`, `episode='0301'` → `'S2026E0301'`)
+3. `test_sports_existing_epg_with_onscreen_episode_not_overwritten` — programme has `season`, `episode`, and `onscreen_episode` already set → `onscreen_episode` NOT in `changes` (not overwritten)
+
+**Test counts: 70 passed, 2 pre-existing version string failures, 11 skipped** (up from 67 passed).
+
+**Key assertion pattern used:**
+```python
+assert changes.get('onscreen_episode', existing_onscreen) == existing_onscreen
+```
+This passes whether the key is absent from changes (not overwritten) or explicitly set to the same value — both are acceptable "not overwritten" behaviors.
