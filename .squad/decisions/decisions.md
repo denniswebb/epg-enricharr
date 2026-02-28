@@ -28,3 +28,15 @@ Both require Bearer token (JWT) and instance URL. Parameterized by .env (DISPATC
 Movies are always skipped before reaching any of these checks.  
 **Why:** User request — EPG can provide partial metadata; we should fill gaps, not discard what's there  
 **Impact:** Implementation begins next session with EPG enrichment logic updated
+
+### 2026-02-28T19: V2 sports/news enrichment approved
+
+**By:** Blair (implementation), Tootie (testing), Jo (review)  
+**What:** Implemented format_string() token formatter, classify_programme() content router, and enrich_programme() V2 logic with partial preservation for sports/news and configurable regex patterns. Added 9 new settings to plugin.json.  
+**Format String Tokens:** `{YYYY}`, `{YY}`, `{MM}`, `{DD}`, `{hh}`, `{mm}`, `{channel}` (non-numeric channels omitted silently)  
+**Content Classification:** Movie → Sports → News → TV (default fallback), using regex patterns from plugin settings  
+**Enrichment Logic:** Movies skip immediately, sports/news preserve existing season/episode when both present else regenerate from templates, TV uses V1 parse_episode_string path  
+**Settings Added:** enable_news_enrichment (bool), sports_season_format, sports_episode_format, news_season_format, news_episode_format, movie_patterns, sports_patterns, news_patterns  
+**Why:** Core V2 feature for dynamic enrichment based on programme type, with backward compatibility for V1 TV logic  
+**Testing:** 30 new tests, 65 passing, 0 failed, 11 skipped  
+**Verdict:** ✅ Approved by Jo, ready to merge

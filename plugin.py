@@ -37,6 +37,26 @@ class Plugin:
         self.sports_categories = [c.strip() for c in sports_cats.split(',') if c.strip()] if isinstance(sports_cats, str) else list(sports_cats or [])
         self.auto_mark_previously_shown = self.config.get('auto_mark_previously_shown', True)
         self.dry_run_mode = self.config.get('dry_run_mode', False)
+        self.enable_news_enrichment = self.config.get('enable_news_enrichment', False)
+        self.sports_season_format = self.config.get('sports_season_format', '{YYYY}')
+        self.sports_episode_format = self.config.get('sports_episode_format', '{MM}{DD}{hh}{mm}{channel}')
+        self.news_season_format = self.config.get('news_season_format', '{YYYY}')
+        self.news_episode_format = self.config.get('news_episode_format', '{MM}{DD}')
+
+        def _parse_patterns(pattern_str, defaults):
+            raw = self.config.get(pattern_str, defaults)
+            parts = [p.strip() for p in raw.split(',') if p.strip()]
+            compiled = []
+            for p in parts:
+                try:
+                    compiled.append(re.compile(p))
+                except re.error:
+                    logger.warning(f"Invalid regex pattern skipped: {p!r}")
+            return compiled
+
+        self.movie_patterns = _parse_patterns('movie_patterns', '(?i)movie,(?i)film,(?i)cinema')
+        self.sports_patterns = _parse_patterns('sports_patterns', '(?i)sport,(?i)football,(?i)soccer,(?i)basketball,(?i)baseball,(?i)hockey,(?i)tennis,(?i)golf,(?i)racing,(?i)boxing,(?i)wrestling,(?i)mma,(?i)ufc')
+        self.news_patterns = _parse_patterns('news_patterns', '(?i)news,(?i)weather,(?i)report')
     
     def parse_episode_string(self, episode_str: str) -> Optional[Tuple[int, int]]:
         """
@@ -70,6 +90,65 @@ class Plugin:
         
         return None
     
+    def format_string(self, template: str, programme) -> str:
+        """
+        Resolve format tokens against EPG programme data.
+        
+        Tokens: {YYYY} {YY} {MM} {DD} {hh} {mm} {channel}
+        Channel token is omitted silently if channel ID is non-numeric.
+        """
+        start = getattr(programme, 'start', None) or getattr(programme, 'start_time', None)
+        result = template
+
+        if start is not None:
+            result = result.replace('{YYYY}', start.strftime('%Y'))
+            result = result.replace('{YY}', start.strftime('%y'))
+            result = result.replace('{MM}', start.strftime('%m'))
+            result = result.replace('{DD}', start.strftime('%d'))
+            result = result.replace('{hh}', start.strftime('%H'))
+            result = result.replace('{mm}', start.strftime('%M'))
+        else:
+            for token in ('{YYYY}', '{YY}', '{MM}', '{DD}', '{hh}', '{mm}'):
+                result = result.replace(token, '')
+
+        if '{channel}' in result:
+            channel_id = getattr(programme, 'channel_id', None)
+            if channel_id is None:
+                try:
+                    channel_id = getattr(programme.channel, 'channel_id', None)
+                except AttributeError:
+                    pass
+            if channel_id is not None and str(channel_id).isdigit():
+                result = result.replace('{channel}', str(channel_id))
+            else:
+                result = result.replace('{channel}', '')
+
+        return result
+
+    def classify_programme(self, programme) -> str:
+        """
+        Classify a programme as 'movie', 'sports', 'news', or 'tv'.
+        
+        Classification uses configured regex patterns applied to categories and title.
+        Precedence: movie → sports → news → tv (default fallback).
+        """
+        custom_props = programme.custom_properties or {}
+        categories = custom_props.get('categories', [])
+        cat_text = ' '.join(categories) if isinstance(categories, list) else str(categories)
+        title = getattr(programme, 'title', '') or ''
+        match_text = cat_text + ' ' + title
+
+        for pattern in self.movie_patterns:
+            if pattern.search(match_text):
+                return 'movie'
+        for pattern in self.sports_patterns:
+            if pattern.search(match_text):
+                return 'sports'
+        for pattern in self.news_patterns:
+            if pattern.search(match_text):
+                return 'news'
+        return 'tv'
+
     def should_enrich_tv(self, programme_data) -> bool:
         """
         Determine if a programme should receive TV enrichment.
@@ -106,28 +185,62 @@ class Plugin:
         """
         changes = {}
         custom_props = programme_data.custom_properties or {}
-        
+
+        content_type = self.classify_programme(programme_data)
+
+        # Movies → skip enrichment entirely
+        if content_type == 'movie':
+            return {}
+
+        # Sports enrichment
+        if content_type == 'sports' and self.enable_sports_enrichment:
+            existing_season = custom_props.get('season')
+            existing_episode = custom_props.get('episode')
+            if existing_season and existing_episode:
+                changes['season'] = existing_season
+                changes['episode'] = existing_episode
+            else:
+                try:
+                    changes['season'] = int(self.format_string(self.sports_season_format, programme_data))
+                except (ValueError, TypeError):
+                    pass
+                changes['episode'] = self.format_string(self.sports_episode_format, programme_data)
+
+        # News enrichment
+        elif content_type == 'news' and self.enable_news_enrichment:
+            existing_season = custom_props.get('season')
+            existing_episode = custom_props.get('episode')
+            if existing_season and existing_episode:
+                changes['season'] = existing_season
+                changes['episode'] = existing_episode
+            else:
+                try:
+                    changes['season'] = int(self.format_string(self.news_season_format, programme_data))
+                except (ValueError, TypeError):
+                    pass
+                changes['episode'] = self.format_string(self.news_episode_format, programme_data)
+
         # TV show enrichment: Parse onscreen_episode
-        if self.should_enrich_tv(programme_data):
+        elif content_type == 'tv' and self.should_enrich_tv(programme_data):
             onscreen_episode = custom_props.get('onscreen_episode')
-            
+
             if onscreen_episode:
                 parsed = self.parse_episode_string(onscreen_episode)
                 if parsed:
                     season, episode = parsed
                     changes['season'] = season
                     changes['episode'] = episode
-                    
+
                     # Preserve original onscreen_episode
                     if 'onscreen_episode' not in custom_props:
                         changes['onscreen_episode'] = onscreen_episode
-        
+
         # Previously-shown flag: Mark if not explicitly new
         if self.auto_mark_previously_shown:
             is_new = custom_props.get('new', False)
             if not is_new:
                 changes['previously_shown'] = True
-        
+
         return changes
     
     def run(self, action: str, params: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:

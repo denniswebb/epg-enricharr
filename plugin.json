@@ -69,6 +69,62 @@
       "label": "Dry run mode",
       "description": "Log changes without writing to database",
       "default": false
+    },
+    {
+      "id": "enable_news_enrichment",
+      "type": "boolean",
+      "label": "Enable news enrichment",
+      "description": "Year-based season and date-based episode numbering for news programmes",
+      "default": false
+    },
+    {
+      "id": "sports_season_format",
+      "type": "text",
+      "label": "Sports season format",
+      "description": "Format string for sports season. Tokens: {YYYY} {YY} {MM} {DD} {hh} {mm} {channel}",
+      "default": "{YYYY}"
+    },
+    {
+      "id": "sports_episode_format",
+      "type": "text",
+      "label": "Sports episode format",
+      "description": "Format string for sports episode. Tokens: {YYYY} {YY} {MM} {DD} {hh} {mm} {channel}",
+      "default": "{MM}{DD}{hh}{mm}{channel}"
+    },
+    {
+      "id": "news_season_format",
+      "type": "text",
+      "label": "News season format",
+      "description": "Format string for news season. Tokens: {YYYY} {YY} {MM} {DD} {hh} {mm} {channel}",
+      "default": "{YYYY}"
+    },
+    {
+      "id": "news_episode_format",
+      "type": "text",
+      "label": "News episode format",
+      "description": "Format string for news episode. Tokens: {YYYY} {YY} {MM} {DD} {hh} {mm} {channel}",
+      "default": "{MM}{DD}"
+    },
+    {
+      "id": "movie_patterns",
+      "type": "text",
+      "label": "Movie detection patterns (comma-separated regex)",
+      "description": "Regex patterns to identify movies. Matched against categories and title.",
+      "default": "(?i)movie,(?i)film,(?i)cinema"
+    },
+    {
+      "id": "sports_patterns",
+      "type": "text",
+      "label": "Sports detection patterns (comma-separated regex)",
+      "description": "Regex patterns to identify sports programmes. Matched against categories and title.",
+      "default": "(?i)sport,(?i)football,(?i)soccer,(?i)basketball,(?i)baseball,(?i)hockey,(?i)tennis,(?i)golf,(?i)racing,(?i)boxing,(?i)wrestling,(?i)mma,(?i)ufc"
+    },
+    {
+      "id": "news_patterns",
+      "type": "text",
+      "label": "News detection patterns (comma-separated regex)",
+      "description": "Regex patterns to identify news programmes. Matched against categories and title.",
+      "default": "(?i)news,(?i)weather,(?i)report"
     }
   ],
   "actions": [

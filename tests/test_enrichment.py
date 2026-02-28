@@ -25,10 +25,12 @@ from plugin import Plugin as EnrichmentPlugin
 class MockProgramData:
     """Mock ProgramData object for testing."""
     
-    def __init__(self, title="Test Programme", custom_properties=None):
+    def __init__(self, title="Test Programme", custom_properties=None, start=None, channel_id=None):
         self.id = 1
         self.title = title
         self.custom_properties = custom_properties or {}
+        self.start = start
+        self.channel_id = channel_id
 
 
 class TestEnrichmentPlugin:
@@ -611,3 +613,195 @@ class TestIntegration:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+# =============================================================================
+# V2 Tests — format_string, classify_programme, enrich_programme routing
+# =============================================================================
+
+class TestFormatString:
+    """Test format_string() token resolution against programme datetime and channel."""
+
+    def setup_method(self):
+        from datetime import datetime
+        self.plugin = EnrichmentPlugin()
+        self.dt = datetime(2026, 3, 15, 19, 30)
+
+    def _prog(self, channel_id=None):
+        return MockProgramData(start=self.dt, channel_id=channel_id)
+
+    def test_YYYY_token(self):
+        assert self.plugin.format_string('{YYYY}', self._prog()) == '2026'
+
+    def test_YY_token(self):
+        assert self.plugin.format_string('{YY}', self._prog()) == '26'
+
+    def test_MM_token(self):
+        assert self.plugin.format_string('{MM}', self._prog()) == '03'
+
+    def test_DD_token(self):
+        assert self.plugin.format_string('{DD}', self._prog()) == '15'
+
+    def test_hh_token(self):
+        assert self.plugin.format_string('{hh}', self._prog()) == '19'
+
+    def test_mm_token(self):
+        assert self.plugin.format_string('{mm}', self._prog()) == '30'
+
+    def test_channel_numeric_included(self):
+        assert self.plugin.format_string('{channel}', self._prog(channel_id='42')) == '42'
+
+    def test_channel_non_numeric_omitted(self):
+        assert self.plugin.format_string('{channel}', self._prog(channel_id='ESPN')) == ''
+
+    def test_channel_none_omitted(self):
+        assert self.plugin.format_string('{channel}', self._prog(channel_id=None)) == ''
+
+    def test_combined_template_numeric_channel(self):
+        p = self._prog(channel_id='42')
+        assert self.plugin.format_string('{MM}{DD}{hh}{mm}{channel}', p) == '0315193042'
+
+    def test_combined_template_non_numeric_channel(self):
+        p = self._prog(channel_id='ESPN')
+        assert self.plugin.format_string('{MM}{DD}{hh}{mm}{channel}', p) == '03151930'
+
+    def test_default_sports_episode_format_numeric_channel(self):
+        """Default sports episode format with numeric channel produces MM+DD+hh+mm+channel."""
+        plugin = EnrichmentPlugin({'enable_sports_enrichment': True})
+        p = self._prog(channel_id='7')
+        result = plugin.format_string(plugin.sports_episode_format, p)
+        assert result == '031519307'
+
+
+class TestClassifyProgramme:
+    """Test classify_programme() content-type routing and precedence."""
+
+    def setup_method(self):
+        self.plugin = EnrichmentPlugin()
+
+    def test_movie_category(self):
+        p = MockProgramData(custom_properties={'categories': ['Movie']})
+        assert self.plugin.classify_programme(p) == 'movie'
+
+    def test_film_category(self):
+        p = MockProgramData(custom_properties={'categories': ['Film']})
+        assert self.plugin.classify_programme(p) == 'movie'
+
+    def test_sports_category(self):
+        p = MockProgramData(custom_properties={'categories': ['Sports']})
+        assert self.plugin.classify_programme(p) == 'sports'
+
+    def test_news_category(self):
+        p = MockProgramData(custom_properties={'categories': ['News']})
+        assert self.plugin.classify_programme(p) == 'news'
+
+    def test_series_category_fallback_to_tv(self):
+        p = MockProgramData(custom_properties={'categories': ['Series']})
+        assert self.plugin.classify_programme(p) == 'tv'
+
+    def test_no_categories_fallback_to_tv(self):
+        p = MockProgramData(custom_properties={})
+        assert self.plugin.classify_programme(p) == 'tv'
+
+    def test_movie_takes_precedence_over_sports(self):
+        p = MockProgramData(custom_properties={'categories': ['Movie', 'Sports']})
+        assert self.plugin.classify_programme(p) == 'movie'
+
+    def test_custom_kino_pattern_classifies_as_movie(self):
+        plugin = EnrichmentPlugin({'movie_patterns': '(?i)kino'})
+        p = MockProgramData(custom_properties={'categories': ['Kino']})
+        assert plugin.classify_programme(p) == 'movie'
+
+    def test_invalid_regex_pattern_skipped_no_crash(self):
+        """Invalid regex is logged as a warning and skipped; classify_programme must not raise."""
+        plugin = EnrichmentPlugin({'movie_patterns': '[invalid'})
+        p = MockProgramData(custom_properties={'categories': ['News']})
+        result = plugin.classify_programme(p)
+        assert result == 'news'
+
+
+class TestEnrichProgrammeV2:
+    """Test V2 enrichment decision logic: movies skip, sports/news generate, TV uses V1 path."""
+
+    def setup_method(self):
+        from datetime import datetime
+        self.dt = datetime(2026, 3, 15, 19, 30)
+        self.sports_plugin = EnrichmentPlugin({'enable_sports_enrichment': True})
+        self.news_plugin = EnrichmentPlugin({'enable_news_enrichment': True})
+        self.default_plugin = EnrichmentPlugin()
+
+    def _sports_prog(self, channel_id='42', extra_props=None):
+        props = {'categories': ['Sports']}
+        if extra_props:
+            props.update(extra_props)
+        return MockProgramData(custom_properties=props, start=self.dt, channel_id=channel_id)
+
+    def test_movie_programme_returns_empty(self):
+        """Movies are skipped entirely — no previously_shown, no season/episode."""
+        p = MockProgramData(custom_properties={'categories': ['Movie']})
+        assert self.sports_plugin.enrich_programme(p) == {}
+
+    def test_sports_both_existing_values_preserved(self):
+        """When both season and episode exist in custom_properties, they are returned as-is."""
+        p = self._sports_prog(extra_props={'season': 2025, 'episode': '01011500'})
+        changes = self.sports_plugin.enrich_programme(p)
+        assert changes['season'] == 2025
+        assert changes['episode'] == '01011500'
+
+    def test_sports_neither_generates_both(self):
+        """No existing season/episode → both generated from format strings."""
+        p = self._sports_prog(channel_id='42')
+        changes = self.sports_plugin.enrich_programme(p)
+        assert changes['season'] == 2026
+        assert changes['episode'] == '0315193042'
+
+    def test_sports_only_season_present_regenerates_from_format(self):
+        """Only season present (no episode) → both regenerated from format strings."""
+        p = self._sports_prog(channel_id=None, extra_props={'season': 2025})
+        changes = self.sports_plugin.enrich_programme(p)
+        assert changes['season'] == 2026
+        assert changes['episode'] == '03151930'
+
+    def test_sports_only_episode_present_generates_season(self):
+        """Only episode present (no season) → both regenerated from format strings."""
+        p = self._sports_prog(channel_id=None, extra_props={'episode': '01011500'})
+        changes = self.sports_plugin.enrich_programme(p)
+        assert changes['season'] == 2026
+        assert 'episode' in changes
+
+    def test_news_programme_enriched_with_news_format(self):
+        """News programme with enable_news_enrichment=True gets season and episode."""
+        p = MockProgramData(custom_properties={'categories': ['News']}, start=self.dt)
+        changes = self.news_plugin.enrich_programme(p)
+        assert changes['season'] == 2026
+        assert changes['episode'] == '0315'
+
+    def test_tv_programme_uses_v1_episode_parsing(self):
+        """TV programme routes to parse_episode_string V1 path."""
+        p = MockProgramData(
+            custom_properties={'categories': ['Series'], 'onscreen_episode': 'S3E07'}
+        )
+        changes = self.default_plugin.enrich_programme(p)
+        assert changes['season'] == 3
+        assert changes['episode'] == 7
+
+    def test_sports_enrichment_disabled_skips_season_episode(self):
+        """enable_sports_enrichment=False (default) → season/episode not set for sports."""
+        p = MockProgramData(
+            custom_properties={'categories': ['Sports']},
+            start=self.dt,
+            channel_id='42'
+        )
+        changes = self.default_plugin.enrich_programme(p)
+        assert 'season' not in changes
+        assert 'episode' not in changes
+
+    def test_news_enrichment_disabled_skips_season_episode(self):
+        """enable_news_enrichment=False (default) → season/episode not set for news."""
+        p = MockProgramData(
+            custom_properties={'categories': ['News']},
+            start=self.dt
+        )
+        changes = self.default_plugin.enrich_programme(p)
+        assert 'season' not in changes
+        assert 'episode' not in changes
