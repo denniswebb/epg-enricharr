@@ -39,7 +39,7 @@
       "id": "enable_sports_enrichment",
       "type": "boolean",
       "label": "Enable sports enrichment (V2)",
-      "description": "Year-based season numbering for sports (coming in V2)",
+      "description": "Enable year-based season numbering and date-based episodes for sports programmes",
       "default": false
     },
     {

@@ -64,3 +64,13 @@ Movies are always skipped before reaching any of these checks.
 **Required follow-up (non-blocking):** Disable `epg-enricharr-1_0_0` on server, standardise team on 2.0.0 as canonical release, investigate admin-level DELETE endpoint for future clean upgrades.  
 **Why:** V2 meets definition of done: deployed + tested on real system.  
 **Impact:** V2 feature closed, shipped live, live-verified.
+
+### 2026-02-28T19:35Z: V2 sports/news enrichment confirmed live with +154 programme delta
+
+**By:** Mrs. Garrett (Local DevOps), Blair (Backend Dev), Dennis (User Directive)  
+**What:** Blair fixed stale "coming in V2" description in plugin.json `enable_sports_enrichment` field. Mrs. Garrett re-enabled `enable_sports_enrichment=true` and `enable_news_enrichment=true` on live Dispatcharr (10.0.0.100:9191) and ran enrichment: 3105/3118 programmes enriched (13 skipped, 0 errors). Comparison against baseline TV-only run: +154 programmes enriched, confirming V2 sports/news logic is firing on live data.  
+**Baseline:** TV-only run (sports/news disabled): 2951 enriched, 167 skipped, 0 errors  
+**V2 Run:** Sports + news enabled: 3105 enriched, 13 skipped, 0 errors  
+**Delta:** +154 enriched programmes (sports and news items without S-E episode strings, now assigned year-based seasons and date-based episodes per V2 templates)  
+**Why:** Live validation required per user directive. Description fix prevents confusion; stats prove functionality.  
+**Impact:** V2 sports/news feature validated on production, ready for documentation refresh and user release notes.
