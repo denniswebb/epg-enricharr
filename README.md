@@ -305,9 +305,9 @@ For developers extending or testing this plugin locally:
 ### Quick Start
 ```bash
 ./dev-setup.sh          # One-time setup
-make test-zip           # Generate plugin zip
-make validate           # Run test suite
-make install-plugin     # Install to local Dispatcharr
+mise run test-zip       # Generate plugin zip
+mise run validate       # Run test suite
+mise run install-plugin # Install to local Dispatcharr
 ```
 
 ### Running Tests
@@ -317,7 +317,7 @@ pytest tests/test_enrichment.py -v
 
 ### Viewing Test Output
 ```bash
-make check-output       # Print XMLTV output from test data
+mise run check-output   # Print XMLTV output from test data
 ```
 
 See [docs/SETUP.md](docs/SETUP.md) for detailed local development instructions.

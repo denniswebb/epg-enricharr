@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE tv SYSTEM "xmltv.dtd">
+<tv>
+  <!-- Sample EPG data for testing enrichment -->
+  
+  <!-- TV Series Example: The Office -->
+  <programme start="20250228180000 -0500" stop="20250228183000 -0500" channel="nbc.com">
+    <title>The Office</title>
+    <sub-title>Drug Testing</sub-title>
+    <desc>The employees are subjected to random drug testing and hilarity ensues.</desc>
+    <category>Comedy</category>
+    <episode-num system="onscreen">S2E20</episode-num>
+    <episode-num system="xmltv_ns">1.19.</episode-num>
+    <date>20050428</date>
+    <credits>
+      <actor>Steve Carell</actor>
+      <actor>Rainn Wilson</actor>
+      <actor>Jenna Fischer</actor>
+    </credits>
+  </programme>
+
+  <!-- TV Series Example: Breaking Bad -->
+  <programme start="20250301200000 -0500" stop="20250301210000 -0500" channel="amc.com">
+    <title>Breaking Bad</title>
+    <sub-title>Half Measures</sub-title>
+    <desc>Walter confronts the reality of his situation, while Hank faces an unexpected turn of events.</desc>
+    <category>Drama</category>
+    <category>Crime</category>
+    <episode-num system="onscreen">S3E12</episode-num>
+    <episode-num system="xmltv_ns">2.11.</episode-num>
+    <date>20100509</date>
+    <length units="minutes">47</length>
+  </programme>
+
+  <!-- Sports Example: NRL 360 -->
+  <programme start="20250228210000 +1000" stop="20250228220000 +1000" channel="ninewide.com.au">
+    <title>NRL 360</title>
+    <desc>Analysis and discussion of the latest NRL news and upcoming matches.</desc>
+    <category>Sports</category>
+    <category>Rugby league</category>
+    <date>20250228</date>
+    <length units="minutes">60</length>
+  </programme>
+
+  <!-- Sports Example: Premier League Football -->
+  <programme start="20250301150000 +0000" stop="20250301165000 +0000" channel="skysp.com">
+    <title>Premier League</title>
+    <sub-title>Manchester City vs Liverpool</sub-title>
+    <desc>Live coverage of the Premier League clash between Manchester City and Liverpool.</desc>
+    <category>Sports</category>
+    <category>Football</category>
+    <date>20250301</date>
+    <length units="minutes">150</length>
+  </programme>
+
+  <!-- Movie Example -->
+  <programme start="20250301200000 -0800" stop="20250301220000 -0800" channel="hbo.com">
+    <title>The Matrix</title>
+    <desc>A computer programmer discovers that his reality is a simulation controlled by machines.</desc>
+    <category>Science Fiction</category>
+    <category>Action</category>
+    <date>19990331</date>
+    <length units="minutes">136</length>
+    <credits>
+      <director>Lana Wachowski</director>
+      <director>Lilly Wachowski</director>
+      <actor>Keanu Reeves</actor>
+      <actor>Laurence Fishburne</actor>
+    </credits>
+  </programme>
+
+</tv>

@@ -12,11 +12,11 @@ This guide walks through setting up a local development environment for epg-enri
 source venv/bin/activate
 
 # 3. Build and validate plugin
-make test-zip
-make validate
+mise run test-zip
+mise run validate
 
 # 4. Run tests
-make check-output
+mise run check-output
 ```
 
 ## Prerequisites
@@ -24,7 +24,7 @@ make check-output
 - Python 3.8+
 - pip / venv
 - Docker (optional, for Dispatcharr instance)
-- make
+- mise
 
 ## Step-by-Step Setup
 
@@ -57,7 +57,7 @@ source venv/bin/activate
 ### 4. Generate Plugin Zip
 
 ```bash
-make test-zip
+mise run test-zip
 ```
 
 Creates `epg-enricharr-1.0.0.zip` with:
@@ -70,7 +70,7 @@ Creates `epg-enricharr-1.0.0.zip` with:
 ### 5. Validate Plugin
 
 ```bash
-make validate
+mise run validate
 ```
 
 Checks:
@@ -81,31 +81,31 @@ Checks:
 ### 6. (Optional) Set Up Local Dispatcharr
 
 ```bash
-make setup-dispatcharr
+mise run setup-dispatcharr
 ```
 
 This starts a Docker container with a basic Dispatcharr instance on `http://localhost:8000`.
 
 ```bash
 # Install plugin to local instance
-make install-plugin
+mise run install-plugin
 
 # Verify enrichment output
-make check-output
+mise run check-output
 ```
 
-## Makefile Targets
+## Mise Tasks
 
-| Target | Purpose |
-|--------|---------|
-| `make help` | Show all available targets |
-| `make dev-setup` | Install dependencies |
-| `make test-zip` | Generate plugin zip |
-| `make validate` | Validate plugin structure |
-| `make setup-dispatcharr` | Start local Dispatcharr (Docker) |
-| `make install-plugin` | Install plugin to Dispatcharr |
-| `make check-output` | Validate enriched output |
-| `make clean` | Remove build artifacts |
+| Task | Purpose |
+|------|---------|
+| `mise run help` | Show all available tasks |
+| `mise run dev-setup` | Install dependencies |
+| `mise run test-zip` | Generate plugin zip |
+| `mise run validate` | Validate plugin structure |
+| `mise run setup-dispatcharr` | Start local Dispatcharr (Docker) |
+| `mise run install-plugin` | Install plugin to Dispatcharr |
+| `mise run check-output` | Validate enriched output |
+| `mise run clean` | Remove build artifacts |
 
 ## Configuration
 
@@ -149,7 +149,7 @@ source venv/Scripts/activate
 
 ### Docker not found
 
-If Docker isn't installed, the `make setup-dispatcharr` target will fall back to native setup.
+If Docker isn't installed, the `mise run setup-dispatcharr` task will fall back to native setup.
 See Dispatcharr documentation for installation: https://github.com/Dispatcharr/Dispatcharr
 
 ### Tests not running
@@ -163,8 +163,8 @@ pip install pytest pytest-cov
 
 1. **Code changes:** Edit `plugin.py` to add enrichment logic
 2. **Add tests:** Update `tests/test_enrichment.py` with test cases
-3. **Validate locally:** Run `make validate` before committing
-4. **Check output:** Use `make check-output` to verify enrichment
+3. **Validate locally:** Run `mise run validate` before committing
+4. **Check output:** Use `mise run check-output` to verify enrichment
 
 ## Contributing
 
