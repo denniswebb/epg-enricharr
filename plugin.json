@@ -70,5 +70,13 @@
       "description": "Log changes without writing to database",
       "default": false
     }
+  ],
+  "actions": [
+    {
+      "id": "enrich_on_epg_refresh",
+      "label": "Enrich EPG on Refresh",
+      "description": "Automatically enrich EPG data when it refreshes",
+      "events": ["epg_refresh"]
+    }
   ]
 }
