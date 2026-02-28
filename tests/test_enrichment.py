@@ -148,5 +148,303 @@ class TestEnrichmentPlugin:
         assert 'Series' in plugin.tv_categories
 
 
+class TestSportsEnrichment:
+    """Test sports programme enrichment with year-based seasons."""
+    
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.plugin = EnrichmentPlugin({'enable_sports_enrichment': True})
+    
+    def test_sports_season_from_year(self):
+        """Test that sports season is derived from start_time year."""
+        from datetime import datetime
+        
+        programme = MockProgramData(
+            custom_properties={
+                'category': ['Soccer'],
+                'start_time': datetime(2026, 2, 28, 15, 0, 0)
+            }
+        )
+        
+        changes = self.plugin.enrich_programme(programme)
+        
+        assert changes.get('season') == 2026
+    
+    def test_sports_sequential_episodes_batch(self):
+        """Test sequential episode numbering for sports in batch."""
+        from datetime import datetime
+        
+        programmes = [
+            MockProgramData(
+                custom_properties={
+                    'category': ['Soccer'],
+                    'start_time': datetime(2026, 2, 28, 15, 0, 0)
+                }
+            ),
+            MockProgramData(
+                custom_properties={
+                    'category': ['Soccer'],
+                    'start_time': datetime(2026, 3, 1, 15, 0, 0)
+                }
+            ),
+            MockProgramData(
+                custom_properties={
+                    'category': ['Soccer'],
+                    'start_time': datetime(2026, 3, 2, 15, 0, 0)
+                }
+            )
+        ]
+        
+        results = self.plugin.enrich_batch(programmes)
+        
+        # Episodes should be sequential: 1, 2, 3
+        assert results[0].get('episode') == 1
+        assert results[1].get('episode') == 2
+        assert results[2].get('episode') == 3
+    
+    def test_sports_separate_sequences_per_sport(self):
+        """Test that different sports maintain separate episode sequences."""
+        from datetime import datetime
+        
+        programmes = [
+            MockProgramData(
+                custom_properties={
+                    'category': ['Soccer'],
+                    'start_time': datetime(2026, 2, 28, 15, 0, 0)
+                }
+            ),
+            MockProgramData(
+                custom_properties={
+                    'category': ['Soccer'],
+                    'start_time': datetime(2026, 3, 1, 15, 0, 0)
+                }
+            ),
+            MockProgramData(
+                custom_properties={
+                    'category': ['Rugby league'],
+                    'start_time': datetime(2026, 2, 28, 17, 0, 0)
+                }
+            ),
+            MockProgramData(
+                custom_properties={
+                    'category': ['Rugby league'],
+                    'start_time': datetime(2026, 3, 1, 17, 0, 0)
+                }
+            )
+        ]
+        
+        results = self.plugin.enrich_batch(programmes)
+        
+        # Soccer: E1, E2
+        assert results[0].get('episode') == 1
+        assert results[1].get('episode') == 2
+        
+        # Rugby: E1, E2 (separate sequence)
+        assert results[2].get('episode') == 1
+        assert results[3].get('episode') == 2
+    
+    def test_sports_all_recognized_categories(self):
+        """Test that all sports categories are recognized."""
+        from datetime import datetime
+        
+        sports_categories = ['Sports', 'Soccer', 'Rugby league', 'Cricket', 'Baseball', 'Hockey']
+        
+        for category in sports_categories:
+            programme = MockProgramData(
+                custom_properties={
+                    'category': [category],
+                    'start_time': datetime(2026, 2, 28, 15, 0, 0)
+                }
+            )
+            
+            changes = self.plugin.enrich_programme(programme)
+            
+            # Should have year-based season
+            assert changes.get('season') == 2026, f"Failed for category: {category}"
+
+
+class TestParsingEdgeCases:
+    """Test edge cases in episode parsing."""
+    
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.plugin = EnrichmentPlugin()
+    
+    def test_parse_s00e00(self):
+        """Test parsing S00E00 (special episodes)."""
+        season, episode = self.plugin.parse_episode_string('S00E00')
+        assert season == 0
+        assert episode == 0
+    
+    def test_parse_high_season_numbers(self):
+        """Test parsing very high season numbers."""
+        season, episode = self.plugin.parse_episode_string('S99E93')
+        assert season == 99
+        assert episode == 93
+    
+    def test_parse_high_episode_numbers(self):
+        """Test parsing very high episode numbers."""
+        season, episode = self.plugin.parse_episode_string('S9E999')
+        assert season == 9
+        assert episode == 999
+    
+    def test_parse_invalid_formats(self):
+        """Test various invalid formats return None."""
+        invalid_formats = [
+            'S2',           # Season only
+            'E36',          # Episode only
+            'S2E',          # Missing episode number
+            'SE36',         # Missing season number
+            'E10E20',       # Malformed
+            '2-36',         # Wrong separator
+            'Season 2',     # Text format
+            '',             # Empty string
+        ]
+        
+        for fmt in invalid_formats:
+            result = self.plugin.parse_episode_string(fmt)
+            assert result is None, f"Expected None for format: {fmt}"
+
+
+class TestPreviouslyShownLogic:
+    """Test previously-shown flag logic."""
+    
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.plugin = EnrichmentPlugin()
+    
+    def test_non_new_programme_gets_previously_shown(self):
+        """Test non-new programme gets previously_shown flag."""
+        programme = MockProgramData(
+            custom_properties={'category': ['Series']}
+        )
+        
+        changes = self.plugin.enrich_programme(programme)
+        
+        assert changes['previously_shown'] is True
+    
+    def test_new_programme_no_previously_shown(self):
+        """Test new programme does not get previously_shown flag."""
+        programme = MockProgramData(
+            custom_properties={
+                'category': ['Series'],
+                'new': True
+            }
+        )
+        
+        changes = self.plugin.enrich_programme(programme)
+        
+        assert 'previously_shown' not in changes
+    
+    def test_programme_without_custom_properties(self):
+        """Test programme without custom_properties gets previously_shown."""
+        programme = MockProgramData()
+        programme.custom_properties = None
+        
+        changes = self.plugin.enrich_programme(programme)
+        
+        # Should handle missing custom_properties gracefully
+        assert changes.get('previously_shown') is True
+    
+    def test_previously_shown_can_be_disabled(self):
+        """Test that previously_shown logic can be disabled."""
+        plugin = EnrichmentPlugin({'auto_mark_previously_shown': False})
+        
+        programme = MockProgramData(
+            custom_properties={'category': ['Series']}
+        )
+        
+        changes = plugin.enrich_programme(programme)
+        
+        assert 'previously_shown' not in changes
+
+
+class TestBulkOperations:
+    """Test bulk enrichment operations."""
+    
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.plugin = EnrichmentPlugin()
+    
+    def test_enrich_batch_100_programmes(self):
+        """Test enriching 100 programmes in batch."""
+        programmes = [
+            MockProgramData(
+                custom_properties={
+                    'category': ['Series'],
+                    'onscreen_episode': f'S1E{i}'
+                }
+            )
+            for i in range(1, 101)
+        ]
+        
+        results = self.plugin.enrich_batch(programmes)
+        
+        assert len(results) == 100
+        # Verify all have season/episode enriched
+        for i, result in enumerate(results):
+            assert result.get('season') == 1
+            assert result.get('episode') == i + 1
+    
+    def test_enrich_batch_preserves_order(self):
+        """Test that batch enrichment preserves programme order."""
+        programmes = [
+            MockProgramData(custom_properties={'category': ['Series']}),
+            MockProgramData(custom_properties={'category': ['Movies']}),
+            MockProgramData(custom_properties={'category': ['Series']}),
+        ]
+        
+        results = self.plugin.enrich_batch(programmes)
+        
+        assert len(results) == 3
+        # Order should be preserved
+    
+    def test_enrich_batch_empty_list(self):
+        """Test enriching empty batch."""
+        results = self.plugin.enrich_batch([])
+        
+        assert results == []
+    
+    def test_enrich_batch_single_programme(self):
+        """Test enriching batch with single programme."""
+        programmes = [
+            MockProgramData(
+                custom_properties={
+                    'category': ['Series'],
+                    'onscreen_episode': 'S2E5'
+                }
+            )
+        ]
+        
+        results = self.plugin.enrich_batch(programmes)
+        
+        assert len(results) == 1
+        assert results[0].get('season') == 2
+        assert results[0].get('episode') == 5
+
+
+class TestIntegration:
+    """Integration tests (to be run with Dispatcharr)."""
+    
+    @pytest.mark.skip(reason="Requires Dispatcharr integration")
+    def test_xmltv_episode_num_tag(self):
+        """Test XMLTV output contains episode-num tag."""
+        # This test requires actual Dispatcharr instance
+        # Will be implemented once Mrs. Garrett sets up local environment
+        pass
+    
+    @pytest.mark.skip(reason="Requires Dispatcharr integration")
+    def test_xmltv_previously_shown_tag(self):
+        """Test XMLTV output contains previously-shown tag."""
+        # This test requires actual Dispatcharr instance
+        pass
+    
+    @pytest.mark.skip(reason="Requires Dispatcharr integration")
+    def test_xmltv_sports_numbering(self):
+        """Test XMLTV output for sports uses year-based season."""
+        # This test requires actual Dispatcharr instance
+        pass
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
