@@ -256,3 +256,9 @@ class Plugin:
         except Exception as e:
             logger.error(f"Error during EPG enrichment: {e}", exc_info=True)
             return {'status': 'error', 'error': str(e)}
+
+
+# Module-level initialization for Dispatcharr plugin loader
+def get_plugin(config=None):
+    """Factory function for plugin instantiation."""
+    return Plugin(config)
