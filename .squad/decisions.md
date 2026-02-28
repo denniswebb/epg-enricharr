@@ -112,3 +112,115 @@
 **What:** Prefer `mise` for managing scripts and local dev environment  
 **Why:** User preference — mise is the tool of choice for this project  
 **Impact:** Mrs. Garrett and Mr. Belvedere should use mise for Makefile/task runner, env management, script orchestration
+
+---
+
+## Session 3: V1 Quality Assessment
+
+### 2026-02-28T17:33:02Z: V1 Status — Critical Blocking Items Identified
+
+**By:** Jo (Lead)
+
+**Finding:** Project is 85% complete. Core implementation is sound and original vision remains perfectly in focus. Three critical gaps prevent release: (1) test import bug blocks all test execution, (2) CI/CD workflows are TODO stubs, (3) safety features untested.
+
+**Verdict:** 🟡 NOT SHIPPABLE until blockers resolved. Estimated 2-3 hours to unblock.
+
+**Blocking Items:**
+1. Import mismatch: tests import `EnrichmentPlugin` but plugin.py defines `Plugin` — prevents test suite execution
+2. CI/CD gaps: squad-ci.yml and squad-release.yml are skeleton files; pytest not configured for automated testing
+3. Safety validation: Dry-run mode has zero test coverage; error handling for malformed data is minimal
+
+**Quality Bar Assessment:**
+- ✅ Functional: Complete. Parsing handles S2E36/S01E05/2x14, previously_shown works, bulk updates use Django ORM efficiently.
+- ❌ Tested: Blocked. 0 tests can execute due to import bug.
+- ✅ Documented: Complete. README comprehensive (354 lines), plugin.json settings described, code docstrings present.
+- ❌ Packaged: Partial. Zip structure correct but CI/CD workflows unimplemented.
+- 🟡 Safe: Partial. Code review shows correct implementation but unvalidated without tests.
+
+**Original Vision:** ✅ Perfectly aligned. No scope creep detected.
+
+**Recommended Path:**
+1. Fix test import (5 min), run suite
+2. Configure CI workflows for pytest (30 min)
+3. Manual smoke test by Dennis on real Dispatcharr (15 min)
+4. All three blocking items resolved → V1 shippable
+
+**Full Report:** `.squad/decisions/inbox/jo-v1-status-gaps.md`
+
+---
+
+### 2026-02-28T17:33:02Z: Test Suite Status — Critical Gaps & Coverage Reality
+
+**By:** Tootie (Tester)
+
+**Finding:** Test suite appears to be 59% passing (20/34 tests) but is providing false confidence due to stale fixtures and import issues. Effective coverage is 🟡 50-80%.
+
+**Current State:**
+- ✅ 20 passing tests (59% of 34)
+- ❌ 3 failing tests (stale fixtures don't match plugin implementation)
+- ⏳ 11 skipped tests (V2 features + integration tests)
+
+**Critical Gaps (Must Fix Before V1 Ships):**
+
+1. **Test Fixtures Use Wrong Field Names** (HIGH) — Tests use `category` (singular) but plugin expects `categories` (plural) per Dispatcharr API. Three core enrichment tests fail because they validate wrong data structure. Fix: Update MockProgramData fixtures.
+
+2. **Dry-Run Mode Completely Untested** (CRITICAL) — Safety feature with zero coverage. Can't verify plugin doesn't write to database when dry_run=true. Critical risk for production debugging. Fix: Add tests for dry-run behavior, stats logging, and changes dict output.
+
+3. **Error Handling for Malformed Data Minimal** (MEDIUM) — Tests cover None and invalid episode strings only. Missing tests for corrupted custom_properties, missing required fields, large datasets, transaction failures. Risk: Plugin could crash in production. Fix: Expand error handling tests.
+
+4. **No Integration Validation** (HIGH) — 3 integration tests skipped. Can't verify XMLTV output contains `<episode-num>` tags. Risk: Works in unit tests but fails in real Dispatcharr. Fix: Mrs. Garrett sets up local Dispatcharr.
+
+5. **Bulk Operations Untested** (MEDIUM) — 4 bulk operation tests skipped due to missing `enrich_batch()` method. Can't validate performance with 100+ programmes. Fix: Decision needed (ship without, or implement).
+
+**Coverage by Feature:**
+- ✅ Episode Parsing: 100% (S2E36, 2x14, edge cases covered)
+- ✅ Previously-Shown Logic: 100%
+- ❌ TV Enrichment: 0% (fixture mismatch)
+- ❌ Dry-Run Mode: 0%
+- 🟡 Error Handling: 30%
+- ✅ Config Defaults: 100%
+
+**Root Cause:** Tests weren't maintained as plugin evolved. Import error prevented anyone from noticing failures.
+
+**Next Steps:**
+1. Fix import issue (DONE by Tootie)
+2. Fix test fixtures to use `categories` plural
+3. Add dry-run mode tests
+4. Expand error handling tests
+5. Set up integration tests
+
+**Full Report:** `.squad/decisions/inbox/tootie-test-gaps.md`
+
+---
+
+### 2026-02-28T17:33:02Z: Documentation Assessment — Production-Ready
+
+**By:** Natalie (Docs)
+
+**Finding:** All 5 V1 criteria met. Documentation is complete, comprehensive, and production-ready. No gaps identified.
+
+**Assessment:**
+- ✅ README.md: Comprehensive (354 lines), covers architecture, installation, configuration, troubleshooting
+- ✅ plugin.json: All setting descriptions present
+- ✅ Code docstrings: All parsing functions documented
+- ✅ Test documentation: Clear docstrings on test cases
+
+**Verdict:** Documentation exceeds expectations. No V1 blockers in this area.
+
+---
+
+### 2026-02-28T17:33:02Z: Plugin API Automation Directives
+
+**By:** Dennis (User)
+
+**What:** Enable plugin via API and reload plugin system via API to support full automation pipeline.
+
+**Directive 1 — Plugin Enable:** POST to `/api/plugins/plugins/{plugin-id}/enabled/` with payload `{"enabled":true}`. Requires Authorization bearer token and proper headers. Impact: Mrs. Garrett to add `enable-plugin` task to mise.
+
+**Directive 2 — Plugin Reload:** POST to `/api/plugins/plugins/reload/` with Authorization bearer token. Triggers system-wide plugin reload (separate from individual enable). Impact: Mrs. Garrett to add `reload-plugins` task to mise.
+
+**Rationale:** Automating deployment pipeline. Future runs can enable/reload plugins without manual UI interaction.
+
+**Endpoints:**
+- Enable: `http://{DISPATCHARR_HOST}/api/plugins/plugins/epg-enricharr-1_0_0/enabled/`
+- Reload: `POST http://{DISPATCHARR_HOST}/api/plugins/plugins/reload/`

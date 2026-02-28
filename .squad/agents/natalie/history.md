@@ -59,3 +59,49 @@
 - Configuration should be a table (scannable)
 - Troubleshooting should be Symptom → Multiple Solutions format
 - Roadmap with status emojis (✅, ⏳, ❌) manages expectations
+
+### Session 2: Documentation Audit v1.0 (2026-02-27)
+
+**Audit Scope:** Verified V1 quality bar completeness against 5 criteria
+
+**Findings Summary:**
+
+| Criterion | Status | Details |
+|-----------|--------|---------|
+| 1. README.md Coverage | ✅ DONE | 353 lines covering: problem, architecture, installation (Docker + native), configuration (table format), usage, before/after examples, troubleshooting with multi-solution flows, roadmap, scope boundaries |
+| 2. plugin.json Setting Descriptions | ✅ DONE | All 7 fields include description; each labels V2 features with "(V2)" tag; defaults clearly shown; helps Dispatcharr UI render actionable help text |
+| 3. plugin.py Docstrings | ✅ DONE | Parse, enrich, and run functions all have docstrings with Args/Returns; `parse_episode_string()` explains supported formats + what's excluded; `enrich_programme()` documents custom_properties behavior; `_enrich_all_programmes()` documents stats output |
+| 4. Out-of-Scope Documentation | ✅ DONE | README §"What it does NOT do" lists 5 non-goals; §"Out of Scope (By Design)" in roadmap explicitly calls out retroactive enrichment, metadata agents, sports (V2), custom UI, multi-language; decisions.md itemizes all 5 non-goals with rationale |
+| 5. Installation Clarity for New Users | ✅ DONE | §Installation has 2 clear paths (Docker + native); prerequisites stated upfront; step-by-step numbered; post-install verification steps included; troubleshooting covers "Plugin Not Loading" symptom with 3 solutions (permissions, restart, logs) |
+
+**Quality Bar Assessment:**
+- ✅ **README explains what it does** → Lines 1–19: Problem statement with visual architecture
+- ✅ **How to install** → Lines 52–91: Docker + native paths, restart, verification
+- ✅ **How to configure** → Lines 96–136: Table + 3 examples (strict matching, dry-run, custom categories)
+- ✅ **Quick start** → Lines 138–151: "Automatic Enrichment" (just use it) + "Manual Trigger" (enrich all)
+- ✅ **plugin.json setting descriptions** → Lines 23–73: All 7 fields with clear descriptions and V2 labeling
+- ✅ **Code docstrings on parsing functions** → plugin.py: `parse_episode_string()` (lines 41–71), `should_enrich_tv()` (lines 73–95), `enrich_programme()` (lines 97–131), `_enrich_all_programmes()` (lines 169–248)
+- ✅ **Out-of-scope items documented as non-goals** → README lines 46–50 ("What it does NOT do"), lines 333–337 ("Out of Scope")
+
+**Deployment Readiness:**
+- Installation instructions assume zero Dispatcharr plugin knowledge → walks through directory placement, restart, settings UI navigation
+- Troubleshooting includes actual command examples (docker restart, grep logs) → actionable
+- Configuration table scannable; dry-run mode prominently featured as safety valve
+- Before/After examples show real XML/JSON transformations (lines 155–203)
+
+**No gaps identified.** All V1 quality bar criteria met.
+
+### Session 3: Documentation Assessment (2026-02-28)
+
+**Finding:** All 5 V1 documentation criteria met. Documentation is complete, comprehensive, and production-ready.
+
+**Assessment:**
+- ✅ README.md: Excellent. 354 lines covering architecture, installation, configuration, troubleshooting, roadmap, and scope boundaries.
+- ✅ plugin.json: All setting descriptions present with V2 labels for future features.
+- ✅ Code docstrings: All parsing functions documented. Test cases have clear docstrings.
+- ✅ Out-of-scope documentation: Non-goals explicitly listed in README and decisions.md.
+- ✅ Installation clarity: Two paths (Docker + native) with step-by-step instructions.
+
+**Quality Assessment:** Documentation exceeds expectations for V1. No blockers in this area. Production-ready.
+
+**Team Coordination:** Docs are ready to ship with V1. Jo's quality bar assessment confirms no documentation gaps remain the blocking issue; focus is on test/CI gaps only.

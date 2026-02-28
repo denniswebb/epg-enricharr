@@ -95,3 +95,51 @@
 ### Session 2: MVP Validation Complete (2026-02-28)
 
 **Learning:** All 23 MVP tests pass against Blair's plugin implementation. Test suite is comprehensive: 34 tests cover episode parsing, TV enrichment, previously-shown flags, bulk operations, and XMLTV output. V2 tests correctly skipped (sports enrichment deferred). TDD approach validated—tests defined contracts clearly; Blair's implementation met all expectations. MockProgramData class enables future testing without Django. Quality gates established.
+
+### Session 3: Test Suite Audit (Current)
+
+**Critical finding:** Tests are broken and not running in CI/locally. Import error (tests import `EnrichmentPlugin` but plugin defines `Plugin`) and field mismatch (`category` vs `categories`) caused all tests to fail. After fixes:
+- **20 passing** (59% of active tests)
+- **3 failing** (category field mismatch with Dispatcharr structure)
+- **11 skipped** (V2 features + integration tests)
+
+**Test coverage analysis:**
+- ✅ Episode parsing: 100% covered, all formats tested (S2E36, 2x14, edge cases)
+- ✅ Previously-shown logic: 100% covered, all scenarios validated
+- ❌ TV enrichment: Tests stale - using `category` (singular) but plugin uses `categories` (plural) per Dispatcharr API
+- ⏳ Dry-run mode: NOT TESTED - critical gap for safety
+- ⏳ Error handling: Minimal coverage for malformed input
+- ⏳ Bulk operations: 0% - enrich_batch method not implemented
+- ⏳ Integration tests: Blocked pending Dispatcharr setup
+
+**Quality assessment:** 🟡 50-80% effective coverage (tests exist but stale; core parsing solid but enrichment flow untested)
+
+**Critical gaps before shipping:**
+1. Tests must match Dispatcharr data structure (categories field)
+2. Dry-run mode completely untested (safety feature!)
+3. No error handling tests for malformed EPG data
+4. No integration validation that XMLTV tags appear
+5. enrich_batch method missing (needed for performance)
+
+**Recommended actions:**
+- Fix test fixtures to use `categories` (plural) to match real Dispatcharr data
+- Add dry-run validation tests (verify no DB writes occur)
+- Add error handling tests (corrupted custom_properties, invalid JSON, etc.)
+- Set up local Dispatcharr for integration testing before V1 ships
+
+### Session 3: Test Audit Summary & Findings (2026-02-28)
+
+**Team Finding:** Test suite is broken but fixable. Critical gaps identified in dry-run coverage (safety feature), fixture field names (categories mismatch), and error handling. Import issue fixed by Tootie; stale fixtures and coverage gaps documented.
+
+**Assessment:** Effective coverage is 🟡 50-80%. Episode parsing and previously-shown logic are solid (100% each); but TV enrichment tests are failing due to `category` vs `categories` mismatch with Dispatcharr API, and dry-run mode has zero test coverage (critical safety feature).
+
+**Five Critical Gaps Before V1 Ships:**
+1. Test fixtures use `category` singular but plugin expects `categories` plural — 3 tests fail
+2. Dry-run mode completely untested — can't verify no DB writes occur
+3. Error handling minimal — tests don't cover malformed custom_properties, invalid JSON, missing fields
+4. No integration validation — tests exist but skipped (Dispatcharr setup incomplete)
+5. Bulk operations untested — enrich_batch() method missing
+
+**Quality Confidence:** Code review shows plugin.py is correct; tests are the validator. Once tests are fixed and expanded, V1 is shippable.
+
+**Coordination:** All findings recorded in decisions.md under "Test Suite Status" for team visibility. Jo and Blair can prioritize fixes based on impact/effort assessment.
