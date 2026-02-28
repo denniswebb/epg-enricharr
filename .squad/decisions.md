@@ -253,3 +253,56 @@
 **Plugin status:** `plugin.py` line 87 (`custom_props.get('categories', [])`) is **CORRECT** and matches real Dispatcharr behavior. No code changes needed.
 
 **V2 deferred features:** `enrich_batch()` method is referenced only in skipped tests. Safe to leave unimplemented for V2.
+
+---
+
+## Session 4: V2 Design Finalization
+
+### 2026-02-28T18:54Z: User directive — numeric channel only
+
+**By:** Dennis (via Copilot)
+
+**What:** The `{channel}` token in episode format strings must only be used when the channel ID is numeric. If the channel ID is non-numeric (e.g., "ESPN"), silently omit it from the generated episode string.
+
+**Why:** User request — captured for team memory
+
+---
+
+### 2026-02-28T18:54Z: User directive — simplified enrichment fallback chain
+
+**By:** Dennis (via Copilot)
+
+**What:** The enrichment logic follows a simple two-step rule:
+  1. If EPG data already provides both season AND episode → use them as-is. No generation.
+  2. If the programme is NOT a movie AND season/episode are missing → generate using format string templates.
+  No middle steps (no external lookups, no partial-match logic). Keep it simple.
+
+**Why:** User request — captured for team memory
+
+---
+
+### 2026-02-28T21:00Z: V2 Design Direction — Approved
+
+**By:** Jo (Lead), Dennis (Owner)
+
+**Status:** ✅ APPROVED — Ready for implementation
+
+This session finalizes V2 design for sports/news enrichment. Key artifacts:
+
+1. **V2 Scope Discussion** — Problem statement, proposed approaches, trade-offs. Verdict: Regex-based content routing with format string templates. No external APIs for V2; defer to V3.
+
+2. **V2 Token System Design** — Complete technical spec. Vocabulary: 7 core tokens (YYYY, YY, MM, DD, hh, mm, channel) + 3 optional. Settings: 4 new format string fields per strategy (sports_season_format, sports_episode_format, news_season_format, news_episode_format). Fallback chain: TV parses episodes; Sports/News generate from templates. Validation: load-time check + runtime graceful failure.
+
+**Key Decisions:**
+- Per-strategy format strings (4 settings), not global
+- Numeric channel requirement; silently omit non-numeric IDs
+- Simplified fallback: no middle steps, no external lookups
+- Compatible with V1 TV enrichment; content classification abstraction needed
+
+**Implementation Readiness:** Spec complete. Blair can code directly. Tests needed for token resolution, validation, graceful failures.
+
+**Impact:** V2 scope locked. Ready for sprint planning and implementation.
+
+**Approved by:** Dennis, Jo  
+**Date:** 2026-02-28  
+**Status:** ACTIVE — Ready for development

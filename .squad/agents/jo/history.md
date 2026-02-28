@@ -52,3 +52,58 @@
 **What's Actually Done:** README (excellent), plugin.json (complete), plugin.py (solid implementation), mise.toml (good automation), test suite (well-designed but broken import).
 
 **Shippable Blockers:** Fix test import, configure CI to run tests, add GitHub release automation. Estimated 2-3 hours of focused work to cross V1 finish line.
+
+### Session 4: V2 Scope Discussion — Expanding Beyond TV (2025-02-28)
+
+**Context:** Dennis proposed expanding plugin to handle sports (AFL/NRL), news, and other non-scripted content. Wants everything DVR'd to have season/episode structure.
+
+**Architectural Decisions:**
+
+1. **Sports episode ID model:** Dennis proposed `MMDDHHmm + channel`. Analysis: solid foundation but needs refinement. Recommended `YYYYMMDDHHMM` with optional channel suffix. Key insight: channel numbers can change in IPTV, so they shouldn't be primary key — only collision tiebreaker.
+
+2. **Regex-based routing:** Approved as V2 scope. Right abstraction level — extends existing category filtering. Risk: regex fragility requires good defaults and dry-run preview. Settings may need JSON encoding in text field (plugin.json limitation).
+
+3. **External data sources:** Deferred to V3. High complexity-to-value ratio for a plugin that runs on EPG refresh. Latency and reliability risks outweigh marginal metadata quality gains. V2 should work entirely offline.
+
+4. **News/daily model:** Year-as-season + MMDD-as-episode is correct. Well-understood pattern that matches Plex's "daily" episode ordering.
+
+5. **Architecture abstraction:** Current `enrich_programme()` needs strategy pattern. Proposed: `classify_content()` → `get_enrichment_strategy()` → `strategy.enrich()`. Keeps strategies testable in isolation, allows composition.
+
+**V2 Scope (unit of work):**
+- Regex-based content routing (local only)
+- Sports strategy: year + MMDDHHMM
+- Daily strategy: year + MMDD
+- JSON-based content rules in settings
+- Dry-run rule preview
+- Backwards compatible with existing tv_categories
+
+**Deferred to V3:**
+- External API integrations (sports databases)
+- Per-sport customization
+- Rich metadata (team info, logos)
+- Admin UI for rules
+- Community rule packs
+
+**Key Insight:** V2 value proposition is "organized DVR for everything" — season/episode presence matters more than metadata quality. Quality enrichment (round numbers, team names) is V3 polish.
+
+### Session 5: V2 Token System Design (2025-02-28)
+
+**Context:** Dennis requested Dispatcharr-style template tokens for configurable season/episode generation. User wants flexibility like `{YYYY}` vs `{YY}` for seasons, `{MMDDhhmm}{channel}` vs `{YYMMDDhhmm}` for episodes.
+
+**Key Design Decisions:**
+
+1. **Token vocabulary:** 7 core tokens (`{YYYY}`, `{YY}`, `{MM}`, `{DD}`, `{hh}`, `{mm}`, `{channel}`) + 3 optional. Excluded title/subtitle/sport tokens — those require parsing, not direct extraction. V2 tokens must be deterministic and fast.
+
+2. **Per-strategy settings:** Each content type (sports, news) gets own format strings. 4 new settings total. Worth the complexity — sports needs timestamp precision + channel, news needs simpler date-only format.
+
+3. **Fallback chain:** TV content continues parse-only (V1 behavior). Sports/News generate from templates. No middle step with external lookups — that's V3 scope.
+
+4. **Validation strategy:** Validate format strings at load time (catch typos early). Runtime errors log warning and skip that programme — never crash bulk enrichment.
+
+5. **Channel edge case:** Empty channel is valid (template produces usable result). Non-numeric channels log warning but don't block. Trust user's template.
+
+**Architectural Insight:** Template system is pure string replacement followed by int conversion. No DSL, no conditionals, no expressions. Simplicity is the feature — users can understand `{MMDDhhmm}` without documentation.
+
+**Plugin.json Limitation:** Only `text` and `boolean` types supported. Format strings work fine as text fields with good description strings explaining tokens.
+
+**Spec delivered:** `.squad/decisions/inbox/jo-v2-token-system-design.md` — Blair can implement directly without further design discussion.
