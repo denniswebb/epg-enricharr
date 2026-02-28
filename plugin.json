@@ -1,0 +1,81 @@
+{
+  "name": "EPG Enricharr",
+  "version": "1.0.0",
+  "description": "Enrich EPG data for Plex DVR recognition",
+  "author": "epg-enricharr-team",
+  "license": "MIT",
+  "homepage": "https://github.com/denniswebb/epg-enricharr",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/denniswebb/epg-enricharr.git"
+  },
+  "keywords": [
+    "epg",
+    "enrichment",
+    "plex",
+    "dvr"
+  ],
+  "requirements": {
+    "dispatcharr": ">=1.0.0",
+    "python": ">=3.8"
+  },
+  "entry_point": "plugin.EnrichmentPlugin",
+  "fields": [
+    {
+      "id": "enabled",
+      "type": "boolean",
+      "label": "Enable plugin",
+      "description": "Enable or disable the entire plugin",
+      "default": true
+    },
+    {
+      "id": "enable_tv_enrichment",
+      "type": "boolean",
+      "label": "Enable TV enrichment",
+      "description": "Parse episode strings (S2E36) and add season/episode metadata",
+      "default": true
+    },
+    {
+      "id": "enable_sports_enrichment",
+      "type": "boolean",
+      "label": "Enable sports enrichment (V2)",
+      "description": "Year-based season numbering for sports (coming in V2)",
+      "default": false
+    },
+    {
+      "id": "tv_categories",
+      "type": "text",
+      "label": "TV categories (comma-separated)",
+      "description": "Categories to apply TV enrichment (e.g., 'Series,Episode,Show')",
+      "default": "Movies,Series,Sports"
+    },
+    {
+      "id": "sports_categories",
+      "type": "text",
+      "label": "Sports categories (comma-separated)",
+      "description": "Categories for sports enrichment (V2 feature)",
+      "default": ""
+    },
+    {
+      "id": "auto_mark_previously_shown",
+      "type": "boolean",
+      "label": "Auto-mark previously shown",
+      "description": "Mark programmes as previously_shown if not explicitly new",
+      "default": true
+    },
+    {
+      "id": "dry_run_mode",
+      "type": "boolean",
+      "label": "Dry run mode",
+      "description": "Log changes without writing to database",
+      "default": false
+    }
+  ],
+  "actions": [
+    {
+      "id": "enrich_all",
+      "label": "Enrich All EPG",
+      "description": "Run enrichment on all programmes in the database"
+    }
+  ]
+}
