@@ -1,0 +1,68 @@
+{
+  "agents": [
+    {
+      "persistent_name": "Jo",
+      "role": "Lead",
+      "universe": "facts_of_life",
+      "created_at": "2026-02-28T03:45:00Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Blair",
+      "role": "Backend Dev",
+      "universe": "facts_of_life",
+      "created_at": "2026-02-28T03:45:00Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Tootie",
+      "role": "Tester",
+      "universe": "facts_of_life",
+      "created_at": "2026-02-28T03:45:00Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Natalie",
+      "role": "Docs",
+      "universe": "facts_of_life",
+      "created_at": "2026-02-28T03:45:00Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Mrs. Garrett",
+      "role": "DevOps (Local)",
+      "universe": "facts_of_life",
+      "created_at": "2026-02-28T03:45:00Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Mr. Belvedere",
+      "role": "DevOps (CI/CD)",
+      "universe": "facts_of_life",
+      "created_at": "2026-02-28T03:45:00Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Scribe",
+      "role": "Session Logger",
+      "universe": "n/a",
+      "created_at": "2026-02-28T03:45:00Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Ralph",
+      "role": "Work Monitor",
+      "universe": "n/a",
+      "created_at": "2026-02-28T03:45:00Z",
+      "legacy_named": false,
+      "status": "active"
+    }
+  ]
+}
