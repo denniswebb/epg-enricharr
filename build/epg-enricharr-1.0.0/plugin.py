@@ -18,11 +18,6 @@ class Plugin:
     version = "1.0.0"
     description = "Enrich EPG data for Plex DVR recognition"
     
-    # Declare event subscriptions for Dispatcharr plugin system
-    event_handlers = {
-        'epg_refresh': 'on_epg_refresh',
-    }
-    
     # Episode format patterns
     EPISODE_PATTERNS = [
         re.compile(r'[Ss](\d+)[Ee](\d+)'),      # S2E36, s02e05
@@ -35,14 +30,13 @@ class Plugin:
         self.enabled = self.config.get('enabled', True)
         self.enable_tv_enrichment = self.config.get('enable_tv_enrichment', True)
         self.enable_sports_enrichment = self.config.get('enable_sports_enrichment', False)
-        self.tv_categories = self.config.get('tv_categories', ['Movies', 'Series', 'Sports'])
-        self.sports_categories = self.config.get('sports_categories', [])
+        # Dispatcharr passes settings as comma-separated strings from the UI
+        tv_cats = self.config.get('tv_categories', 'Movies,Series,Sports')
+        self.tv_categories = [c.strip() for c in tv_cats.split(',')] if isinstance(tv_cats, str) else list(tv_cats or [])
+        sports_cats = self.config.get('sports_categories', '')
+        self.sports_categories = [c.strip() for c in sports_cats.split(',') if c.strip()] if isinstance(sports_cats, str) else list(sports_cats or [])
         self.auto_mark_previously_shown = self.config.get('auto_mark_previously_shown', True)
         self.dry_run_mode = self.config.get('dry_run_mode', False)
-    
-    def get_event_handlers(self):
-        """Return event handlers for Dispatcharr to register."""
-        return self.event_handlers
     
     def parse_episode_string(self, episode_str: str) -> Optional[Tuple[int, int]]:
         """
@@ -90,7 +84,7 @@ class Plugin:
             return False
         
         custom_props = programme_data.custom_properties or {}
-        categories = custom_props.get('category', [])
+        categories = custom_props.get('categories', [])
         
         # Check if any category matches TV categories
         if isinstance(categories, list):
@@ -148,15 +142,25 @@ class Plugin:
         Returns:
             Result dictionary with status and metrics
         """
+        logger.info(f"🔥 EPG-Enricharr.run() called with action='{action}'")
+
+        # Apply settings from Dispatcharr context (plugin is instantiated without config at load time)
+        settings = context.get('settings', {})
+        if settings:
+            self.__init__(config=settings)
+        
         if not self.enabled:
+            logger.info("Plugin disabled, skipping")
             return {
                 'status': 'skipped',
                 'message': 'Plugin is disabled'
             }
         
-        if action == 'enrich_all':
+        if action in ('enrich_all', 'enrich_on_epg_refresh'):
+            logger.info(f"Running enrichment for action '{action}'...")
             return self._enrich_all_programmes(context)
         
+        logger.warning(f"Unknown action: {action}")
         return {
             'status': 'error',
             'message': f'Unknown action: {action}'
@@ -173,6 +177,7 @@ class Plugin:
             Result with enrichment statistics
         """
         log = context.get('logger', logger)
+        log.info("🎯 Starting EPG enrichment...")
         
         try:
             # Import Django models (late import to avoid issues in tests)
@@ -234,7 +239,7 @@ class Plugin:
                     'stats': stats
                 }
         
-        log.info(f"Enrichment complete: {stats}")
+        log.info(f"✅ Enrichment complete: {stats}")
         
         return {
             'status': 'ok',
@@ -249,17 +254,6 @@ class Plugin:
             "version": self.version,
             "description": self.description
         }
-    
-    def on_epg_refresh(self, **kwargs):
-        """Handle EPG refresh event - auto-trigger enrichment."""
-        logger.info("EPG refresh event received, triggering enrichment...")
-        try:
-            result = self._enrich_all_programmes(kwargs)
-            logger.info(f"EPG enrichment completed: {result}")
-            return result
-        except Exception as e:
-            logger.error(f"Error during EPG enrichment: {e}", exc_info=True)
-            return {'status': 'error', 'error': str(e)}
 
 
 # Module-level initialization for Dispatcharr plugin loader
