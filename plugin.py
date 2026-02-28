@@ -40,6 +40,10 @@ class Plugin:
         self.auto_mark_previously_shown = self.config.get('auto_mark_previously_shown', True)
         self.dry_run_mode = self.config.get('dry_run_mode', False)
     
+    def get_event_handlers(self):
+        """Return event handlers for Dispatcharr to register."""
+        return self.event_handlers
+    
     def parse_episode_string(self, episode_str: str) -> Optional[Tuple[int, int]]:
         """
         Parse onscreen episode string to extract season and episode numbers.

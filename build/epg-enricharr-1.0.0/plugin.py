@@ -11,12 +11,17 @@ from typing import Optional, Tuple, Dict, Any
 logger = logging.getLogger(__name__)
 
 
-class EnrichmentPlugin:
+class Plugin:
     """Dispatcharr plugin to enrich EPG custom_properties with season/episode metadata."""
     
     name = "EPG Enricharr"
     version = "1.0.0"
     description = "Enrich EPG data for Plex DVR recognition"
+    
+    # Declare event subscriptions for Dispatcharr plugin system
+    event_handlers = {
+        'epg_refresh': 'on_epg_refresh',
+    }
     
     # Episode format patterns
     EPISODE_PATTERNS = [
@@ -34,6 +39,10 @@ class EnrichmentPlugin:
         self.sports_categories = self.config.get('sports_categories', [])
         self.auto_mark_previously_shown = self.config.get('auto_mark_previously_shown', True)
         self.dry_run_mode = self.config.get('dry_run_mode', False)
+    
+    def get_event_handlers(self):
+        """Return event handlers for Dispatcharr to register."""
+        return self.event_handlers
     
     def parse_episode_string(self, episode_str: str) -> Optional[Tuple[int, int]]:
         """
@@ -240,3 +249,20 @@ class EnrichmentPlugin:
             "version": self.version,
             "description": self.description
         }
+    
+    def on_epg_refresh(self, **kwargs):
+        """Handle EPG refresh event - auto-trigger enrichment."""
+        logger.info("EPG refresh event received, triggering enrichment...")
+        try:
+            result = self._enrich_all_programmes(kwargs)
+            logger.info(f"EPG enrichment completed: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Error during EPG enrichment: {e}", exc_info=True)
+            return {'status': 'error', 'error': str(e)}
+
+
+# Module-level initialization for Dispatcharr plugin loader
+def get_plugin(config=None):
+    """Factory function for plugin instantiation."""
+    return Plugin(config)

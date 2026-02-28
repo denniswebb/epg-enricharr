@@ -117,3 +117,10 @@ else
     echo "⚠️  No test EPG data found. Run 'mise run test-zip' first."
 fi
 """
+
+[tasks.deploy-plugin]
+description = "Deploy plugin to remote Dispatcharr instance"
+depends = ["test-zip"]
+run = """
+./scripts/deploy.sh
+"""
