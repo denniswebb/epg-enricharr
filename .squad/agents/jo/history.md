@@ -197,3 +197,19 @@
 2. `test_sports_season_format_failure_writes_episode_no_crash` — Strengthened from a permissive `if 'onscreen_episode' in changes:` guard to two unconditional assertions: presence (`assert 'onscreen_episode' in changes`) and specific value (`assert changes['onscreen_episode'] == '03151930'`). The fallback value `'03151930'` is correct for `datetime(2026, 3, 15, 19, 30)` with default `sports_episode_format: {MMDDhhmm}`.
 
 **Pattern confirmed:** The `.get(key, default) == default` pattern is the right assertion shape for "preserve" tests. It correctly catches overwrites while tolerating both "not written" and "written with same value" outcomes.
+
+### Session 10: V3 Sports Grouping Architecture Decision (2026-03-01)
+
+**Context:** Blair completed two research tasks: (1) XMLTV field mapping showing no `sub_title` or `show_title` hook in custom_properties, (2) live title format analysis showing 85% of sports titles use `"Sport : Description"` colon-delimited format. Core problem: Plex groups by `<title>`, but Dispatcharr writes full EPG title to XMLTV, not a split form.
+
+**Key Finding from plugin.py:** The plugin has FULL Django ORM access to `ProgramData` model instances. `_enrich_all_programmes()` already mutates model state and calls `bulk_update()`. Adding `'title'` to the bulk_update fields list is trivial — no API limitation exists. Blair's research concluded "plugin cannot modify .title" but this is incorrect; the plugin CAN, it just hasn't done so yet because V1/V2 scope was custom_properties only.
+
+**Decision:** Option A — Modify `programme.title` directly. Feature-flagged (`enable_sports_title_grouping`, default: false), original title preserved in `custom_properties.original_title`. This crosses the "enrichment-only" boundary into data transformation, which requires Dennis's explicit approval.
+
+**Architecture Insight:** The `_` prefix convention for model-level fields (vs custom_properties keys) in the changes dict keeps the return interface clean. `enrich_programme()` returns `{'_title': 'AFL', 'original_title': 'AFL : ...', 'season': 2026, ...}` and `_enrich_all_programmes()` routes `_`-prefixed keys to model fields.
+
+**Gating Question for Dennis:** Is modifying raw EPG programme.title acceptable? Trade-off: Plex grouping works, but Dispatcharr UI shows truncated title.
+
+**Fallback if rejected:** Option C (onscreen_episode metadata) + Option B (Dispatcharr feature request for `show_title` override).
+
+**Decision artifact:** `.squad/decisions/inbox/jo-v3-sports-grouping-arch.md`

@@ -1,39 +1,53 @@
 ---
-updated_at: 2026-02-28T21:53:00Z
-focus_area: V3 planning — sports title grouping in Plex
+updated_at: 2026-02-28T22:16:56Z
+focus_area: V3 sports title grouping architecture — pending Dennis approval
 active_issues: []
 ---
 
 # What We're Focused On
 
 ## Active Focus
-**V3 planning — sports title grouping in Plex**
+**V3 sports title grouping — Jo's architecture decision pending user approval**
+
+## Critical Decisions Waiting
+
+**Dennis must approve:** Modify `programme.title` directly in plugin (scope expansion: enrichment → transformation). Jo's decision document includes 3-phase implementation spec and fallback options if rejected.
 
 ## Immediate Next Actions (in order)
 
-1. **Blair: Research task** — Check Dispatcharr source `apps/output/views.py` (lines 1698-1726) for what `custom_properties` field controls XMLTV `<title>` vs `<sub-title>`. Does writing `sub_title` or `show_title` get picked up?
+1. **Dennis approval/rejection** — Review Jo's architecture decision (merged into decisions.md, Session 8 entry). Two paths:
+   - **APPROVE:** Blair executes Phase 0–3 (subtitle field check, title splitting, model mutations, settings)
+   - **REJECT:** Blair executes fallback plan (metadata-only enrichment + feature request to Dispatcharr)
 
-2. **Blair: Research task** — Pull real EPG title samples from live DB for AFL, NBA, NRL, Netball, SuperLeague. Are titles consistently "Sport: Team v Team" prefix-colon format or messy? DB access: `docker exec Dispatcharr psql -U dispatch -d dispatcharr` via SSH to 10.0.0.100. Table: `epg_programdata`, column: `custom_properties`.
+2. **Blair Phase 0 (independent)** — Can proceed regardless of Phase 1–3 approval:
+   - Verify `ProgramData` model has `subtitle` field
+   - Check if Dispatcharr's XMLTV code maps `programme.subtitle` → `<sub-title>`
+   - If both yes: document for future enhancement
 
-3. **Jo: After Blair's research** — Decide approach for show title extraction: delimiter (split on ":") vs configurable per-sport regex vs hybrid.
+3. **Session continuation** — Awaiting Dennis to review decision in decisions.md and provide go/no-go before Blair implements Phase 1–3
 
-4. **V3 feature planning conversation with Dennis** — He wants to discuss all V3 features, not just sports grouping. Make sure nothing gets dismissed undocumented.
+## Completed in Session 8
 
-## Known V3 Candidates (from decisions.md)
+✅ Blair: XMLTV field mapping research complete — Findings: `sub_title` not mapped, `show_title`/`series_title` don't exist, no custom_properties hook for title override  
+✅ Jo: V3 sports grouping architecture decision finalized — Option A (modify title) with full spec and fallback plan  
+✅ Scribe: Decisions merged, logs written, inbox cleaned, blair history updated  
 
-- Sports title grouping (core V3 — Plex groups all AFL matches under "AFL" etc.)
-- Better EPG descriptions for sports (current ones are generic filler)
-- Sequential episode numbering for sports (date-based is ugly in Plex)
-- Multi-language episode string parsing
-- Enrichment statistics dashboard
-- Admin UI for category mapping
-- External API lookups (TVDB/TMDB) — explicitly deferred
+## Known V3 Candidates (Future Planning)
+
+- Sports title grouping (core V3 — **IN PROGRESS, pending approval**)
+- Better EPG descriptions for sports (future)
+- Sequential episode numbering for sports (future)
+- Multi-language episode string parsing (future)
+- External API enrichment (V3 goal): TheSportsDB, TVDB
 
 ## Current State
 
-- v2.0.2 live, 73 tests passing
-- Decisions files consolidated
+- v2.0.2 live, 73 tests passing, live-verified
+- V3 research complete, architecture decision ready for user sign-off
+- Phase 0 ready to start; Phase 1–3 blocked on approval
 
-## Process Directive
+## Process Notes
 
-Always update now.md at end of session with pending items so fresh sessions pick up automatically.
+- Session memory captured in this file; fetch for next session context
+- Conversational planning style: findings presented, then discuss with Dennis
+- Definition of "done": deployed + real-world tested (not unit tests alone)

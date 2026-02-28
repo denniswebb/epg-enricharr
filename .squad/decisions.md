@@ -572,3 +572,121 @@ Movies are always skipped before reaching any of these checks.
 **What:** Planning sessions must be conversational and back-and-forth. No walls of text. Present findings briefly, then discuss. Let Dennis add context, prioritize, or dismiss items interactively before writing anything down.  
 **Why:** User request — captured for team memory  
 **Impact:** Planning conversations are dialogue-driven, not documentation-driven; findings stored after discussion.
+
+---
+
+## Session 8: V3 Sports Grouping Research & Architecture
+
+### 2026-02-28T22:16:56Z: Research Complete — XMLTV Field Mapping
+
+**By:** Blair (Backend Dev)  
+**Status:** Complete  
+
+**Research Questions:**
+1. Does `custom_properties.sub_title` → XMLTV `<sub-title>`? **No**
+2. Does `custom_properties.show_title` → XMLTV `<title>`? **No**
+3. How can we set grouped show name (e.g., "AFL") separate from episode title?
+
+**Findings:**
+- Dispatcharr does NOT read `sub_title` from custom_properties
+- Dispatcharr XMLTV output reads `title` from programme.title (EPG source), not from custom_properties
+- No custom_properties field can override the XMLTV `<title>` element
+- Current architecture gap: Only `<title>` element groups shows in Plex; we have no enrichment path to title
+
+**Implication:** Custom_properties enrichment alone cannot solve sports grouping. Requires architectural change at plugin level (modify programme.title) or Dispatcharr core (add title override support).
+
+**Fields Currently Mapped to XMLTV:**
+| custom_properties | XMLTV Element | Behavior |
+|-------------------|---------------|----------|
+| `onscreen_episode` | `<episode-num system="onscreen">` | Verbatim |
+| `season` + `episode` | `<episode-num system="xmltv_ns">` | Calculated |
+| `previously_shown` | `<previously-shown>` | Boolean |
+| `categories` | `<category>` | List |
+| `title` | `<title>` | **NOT FROM custom_properties** |
+
+---
+
+### 2026-02-28T22:16:56Z: Architecture Decision — V3 Sports Grouping
+
+**By:** Jo (Tech Lead)  
+**Status:** PENDING DENNIS APPROVAL  
+**Blocks:** Blair's V3 implementation phases 1–3  
+
+**Decision:** Option A — Modify `programme.title` directly. Feature-flagged, original title preserved in custom_properties.
+
+**Why This Works:**
+1. Django ORM `bulk_update()` allows title mutation (same pattern as custom_properties)
+2. Plugin runs after EPG refresh, so re-splits every cycle
+3. 85% sports titles follow "Sport : Description" format — colon split is reliable
+
+**The Trade-Off (Requires User Approval):**
+- ✅ Plex groups all AFL matches under "AFL"
+- ✅ Simple, reliable parsing
+- ✅ Original title preserved for recovery
+- ✅ Feature-flagged, off by default
+- ❌ Modifies raw EPG data (not pure enrichment)
+- ❌ Dispatcharr UI shows "AFL" instead of full title
+- ❌ Other systems see truncated title
+
+**This crosses from enrichment into data transformation. Scope expansion requires user sign-off.**
+
+**Implementation Spec (For Blair):**
+
+**Phase 0:** Pre-check (quick, do first)
+- Verify `ProgramData` model has a `subtitle` field
+- Check if Dispatcharr's XMLTV code maps `programme.subtitle` → `<sub-title>`
+- If both yes: write match description to subtitle too (better XMLTV semantics)
+
+**Phase 1:** Title splitting in `enrich_programme()`
+```python
+if enable_sports_title_grouping and ':' in programme.title:
+    parts = programme.title.split(':', 1)
+    group_name = parts[0].strip()
+    match_desc = parts[1].strip()
+    if group_name:
+        changes['_title'] = group_name
+        changes['original_title'] = programme.title
+        changes['onscreen_episode'] = f"S{changes.get('season', '')}E{changes.get('episode', '')}"
+```
+
+**Phase 2:** Update `_enrich_all_programmes()`
+- Extract `_title` and `_subtitle` keys from changes (model fields, not custom_properties)
+- Apply to programme.title / programme.subtitle before custom_properties.update()
+- Add fields to bulk_update() dynamically
+
+**Phase 3:** Settings (plugin.json)
+```json
+{
+    "key": "enable_sports_title_grouping",
+    "type": "boolean",
+    "default": false,
+    "description": "Split sports titles at ':' for Plex grouping. Sets title to sport name; preserves original in custom_properties."
+},
+{
+    "key": "sports_title_delimiter",
+    "type": "text",
+    "default": ":",
+    "description": "Delimiter for splitting sport titles into group name and description."
+}
+```
+
+**Fallback (if Dennis rejects):**
+1. **Option C:** Enrich what we can — write `custom_properties.sport_name` with parsed group prefix (metadata-only, no XMLTV effect)
+2. **Option B:** File Dispatcharr feature request for `custom_properties.show_title` → XMLTV `<title>` override support
+3. **Document limitation** in README
+
+**Verdict:** Can we do it? Yes. Should we do it? That's Dennis's call — it modifies raw EPG data.
+
+**Status:** Ready for user approval. Phase 0 (subtitle field check) can proceed independently.
+
+---
+
+### 2026-02-28T22:16:56Z: V3 Research Session Log
+
+**By:** Scribe  
+**Period:** Session 7 continuation (Agent Batch 2)  
+
+**Agents Spawned:** Blair (XMLTV research), Jo (architecture decision)  
+**Status:** Both completed; decision pending user approval  
+**Key Deliverable:** Jo's architecture decision with full 3-phase spec; fallback options if rejected  
+**Next:** User approval on title modification scope expansion, then Blair executes Phase 0–3 or fallback plan

@@ -243,3 +243,103 @@ if existing_season and existing_episode:
 **Test result:** 67 pass, 11 skipped, 2 pre-existing failures (version string `2.0.0` vs `2.0.1`, unrelated to this fix). Zero regression.
 
 **Decision file written to:** `.squad/decisions/inbox/blair-existing-branch-fix.md`
+
+### Session 8: XMLTV Field Mapping Research (2026-03-01)
+
+**Research Task:** Understand how Dispatcharr converts `custom_properties` to XMLTV output, specifically investigating: (1) `sub_title` field mapping, (2) `show_title`/`series_title` field support, (3) approach for "grouped show name" (sports use case).
+
+**Key Findings:**
+
+**XMLTV Field Mapping (Confirmed via prior sessions):**
+- `onscreen_episode` → `<episode-num system="onscreen">` (reads verbatim from custom_properties)
+- `season` + `episode` → `<episode-num system="xmltv_ns">` (Dispatcharr builds from integer math)
+- `previously_shown` → `<previously-shown>` tag
+- `categories` → `<category>` elements (plural list in custom_properties)
+
+**Critical Discovery — No sub_title Support:**
+- ❌ Dispatcharr does NOT map `custom_properties.sub_title` to XMLTV `<sub-title>` element
+- Setting `sub_title` in enrichment has NO EFFECT on XMLTV output
+- No custom_properties field feeds into the XMLTV `<sub-title>` element
+
+**Title Field Limitation:**
+- ❌ XMLTV `<title>` comes from EPG programme.title field, not custom_properties
+- `show_title` and `series_title` custom_properties fields do NOT exist in Dispatcharr's XMLTV pipeline
+- Plugin cannot override or supplement the primary title
+
+**Sports Grouping Architecture Gap:**
+- ⚠️ Plex DVR groups sports matches by XMLTV `<title>` value — all episodes with same title are grouped
+- Current architecture has NO field in custom_properties that modifies the output title
+- Achieving "AFL series" grouping separate from episode title ("Collingwood v Richmond") requires:
+  - Either: Dispatcharr core change to manipulate programme.title before XMLTV generation (outside plugin scope)
+  - Or: Plex-side metadata agent configuration (outside XMLTV scope)
+  - Or: V3 research into custom XMLTV extensions Dispatcharr might support
+
+**Recommendation:** Sports grouping is NOT achievable via current XMLTV/custom_properties enrichment layer. Requires architectural decision at V3 planning phase.
+
+**Research artifacts written to:**
+- `.squad/decisions/inbox/blair-xmltv-field-research.md` — Complete technical findings and recommendation
+
+### Session 9: Subtitle Field Check (2026-03-01)
+
+**Task:** Verify if Dispatcharr `ProgramData` model has a `subtitle` field and whether it maps to XMLTV `<sub-title>` for Plex support.
+
+**Critical Findings:**
+
+1. **Model Field Exists:** ✅ `sub_title` (underscore format) is a core field on `ProgramData` model.
+2. **XMLTV Mapping Confirmed:** ✅ Dispatcharr writes `prog.sub_title` verbatim to `<sub-title>` element (lines 1677–1678 in views.py).
+3. **Plugin Cannot Write It:** ❌ The subtitle comes from the model field, not from `custom_properties`. Plugin enrichment has no path to populate `prog.sub_title`.
+
+**Architecture Implication:**
+
+Jo's idea to write match descriptions to a subtitle field for Plex support is **NOT feasible via plugin enrichment**. Here's the blocker:
+- Dispatcharr XMLTV generator reads from `prog.sub_title` (database field), not `custom_properties`
+- Plugin can only modify `custom_properties` (JSONField) via `enrich_programme()`
+- No bridge exists between custom_properties and the model's sub_title field
+- To write subtitles, we'd need database-level field manipulation (outside plugin scope) or require Dispatcharr core to support subtitle population from custom_properties
+
+**Recommendation:** If match descriptions are valuable for reference, store them in `custom_properties` for our own UI/logging use only. Plex XMLTV import will not see them because they won't appear in the XMLTV output.
+
+**Decision file:** `.squad/decisions/inbox/blair-subtitle-field-check.md`
+
+---
+
+### Session 10: V3 Sports Grouping Research & Architecture Decision (2026-02-28)
+
+**Synthesis of Blair's XMLTV research into Jo's architecture proposal.**
+
+**Key Finding (from Blair's research):**
+- Custom_properties enrichment alone **cannot** solve sports grouping problem
+- Dispatcharr XMLTV reads `<title>` from programme.title (EPG source), not custom_properties
+- No custom_properties field can override XMLTV output title
+- Subtitle field exists in model but plugin has no path to populate it (model field, not custom_properties)
+
+**Architecture Decision by Jo — Option A (Recommended):**
+- Modify `programme.title` directly in plugin (feature-flagged, off by default)
+- Original title preserved in `custom_properties.original_title` for recovery
+- 85% sports titles follow "Sport : Description" format — colon split is reliable
+- Same Django ORM mutation pattern as custom_properties enrichment
+
+**Scope Expansion:** This crosses from enrichment into data transformation. Modifies raw EPG data. Requires explicit user approval.
+
+**Trade-Offs:**
+- ✅ Plex groups all AFL matches under "AFL" — solves the business problem
+- ✅ Feature-flagged, off by default — safe opt-in
+- ✅ Original title preserved — recovery possible
+- ❌ Dispatcharr UI shows truncated title instead of full episode title
+- ❌ Other Dispatcharr consumers see modified title
+- ❌ Philosophical: not pure enrichment anymore
+
+**Implementation Ready (Phase 0–3 spec documented):**
+- Phase 0: Check if ProgramData has subtitle field, confirm XMLTV mapping
+- Phase 1: Title splitting logic in enrich_programme()
+- Phase 2: Model field mutation in bulk update pipeline
+- Phase 3: plugin.json settings (enable_sports_title_grouping, sports_title_delimiter)
+
+**Fallback Plan (if rejected):**
+1. Option C: Write `custom_properties.sport_name` only (metadata, no XMLTV effect)
+2. Option B: File Dispatcharr feature request for custom_properties title override support
+3. Document the limitation in README
+
+**Status:** PENDING DENNIS APPROVAL. Phase 0 can proceed independently. Blocks Phase 1–3 implementation.
+
+**Research artifacts merged into decisions.md:** `.squad/decisions/inbox/blair-xmltv-field-research.md`, `.squad/decisions/inbox/jo-v3-sports-grouping-arch.md`
