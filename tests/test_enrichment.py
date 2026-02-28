@@ -16,8 +16,10 @@ Test coverage:
 - ⏳ XMLTV output (integration tests)
 """
 
+import sys
 import pytest
-from plugin import EnrichmentPlugin
+from unittest.mock import MagicMock, patch
+from plugin import Plugin as EnrichmentPlugin
 
 
 class MockProgramData:
@@ -76,21 +78,21 @@ class TestEnrichmentPlugin:
     def test_should_enrich_tv_with_series_category(self):
         """Test TV enrichment filtering by category."""
         programme = MockProgramData(
-            custom_properties={'category': ['Series', 'Drama']}
+            custom_properties={'categories': ['Series', 'Drama']}
         )
         assert self.plugin.should_enrich_tv(programme) is True
     
     def test_should_enrich_tv_with_movies_category(self):
         """Test TV enrichment with Movies category."""
         programme = MockProgramData(
-            custom_properties={'category': ['Movies']}
+            custom_properties={'categories': ['Movies']}
         )
         assert self.plugin.should_enrich_tv(programme) is True
     
     def test_should_not_enrich_tv_without_matching_category(self):
         """Test that programmes without matching categories are not enriched."""
         programme = MockProgramData(
-            custom_properties={'category': ['News', 'Documentary']}
+            custom_properties={'categories': ['News', 'Documentary']}
         )
         assert self.plugin.should_enrich_tv(programme) is False
     
@@ -98,7 +100,7 @@ class TestEnrichmentPlugin:
         """Test that TV enrichment respects enabled flag."""
         plugin = EnrichmentPlugin({'enable_tv_enrichment': False})
         programme = MockProgramData(
-            custom_properties={'category': ['Series']}
+            custom_properties={'categories': ['Series']}
         )
         assert plugin.should_enrich_tv(programme) is False
     
@@ -106,7 +108,7 @@ class TestEnrichmentPlugin:
         """Test enriching a programme with onscreen_episode."""
         programme = MockProgramData(
             custom_properties={
-                'category': ['Series'],
+                'categories': ['Series'],
                 'onscreen_episode': 'S2E36'
             }
         )
@@ -119,7 +121,7 @@ class TestEnrichmentPlugin:
     def test_enrich_programme_previously_shown_non_new(self):
         """Test that non-new programmes are marked as previously_shown."""
         programme = MockProgramData(
-            custom_properties={'category': ['Series']}
+            custom_properties={'categories': ['Series']}
         )
         
         changes = self.plugin.enrich_programme(programme)
@@ -130,7 +132,7 @@ class TestEnrichmentPlugin:
         """Test that new programmes are not marked as previously_shown."""
         programme = MockProgramData(
             custom_properties={
-                'category': ['Series'],
+                'categories': ['Series'],
                 'new': True
             }
         )
@@ -142,7 +144,7 @@ class TestEnrichmentPlugin:
     def test_enrich_programme_no_changes_without_data(self):
         """Test that programmes without enrichable data return no changes."""
         programme = MockProgramData(
-            custom_properties={'category': ['News']}
+            custom_properties={'categories': ['News']}
         )
         
         changes = self.plugin.enrich_programme(programme)
@@ -176,7 +178,7 @@ class TestSportsEnrichment:
         
         programme = MockProgramData(
             custom_properties={
-                'category': ['Soccer'],
+                'categories': ['Soccer'],
                 'start_time': datetime(2026, 2, 28, 15, 0, 0)
             }
         )
@@ -193,19 +195,19 @@ class TestSportsEnrichment:
         programmes = [
             MockProgramData(
                 custom_properties={
-                    'category': ['Soccer'],
+                    'categories': ['Soccer'],
                     'start_time': datetime(2026, 2, 28, 15, 0, 0)
                 }
             ),
             MockProgramData(
                 custom_properties={
-                    'category': ['Soccer'],
+                    'categories': ['Soccer'],
                     'start_time': datetime(2026, 3, 1, 15, 0, 0)
                 }
             ),
             MockProgramData(
                 custom_properties={
-                    'category': ['Soccer'],
+                    'categories': ['Soccer'],
                     'start_time': datetime(2026, 3, 2, 15, 0, 0)
                 }
             )
@@ -226,25 +228,25 @@ class TestSportsEnrichment:
         programmes = [
             MockProgramData(
                 custom_properties={
-                    'category': ['Soccer'],
+                    'categories': ['Soccer'],
                     'start_time': datetime(2026, 2, 28, 15, 0, 0)
                 }
             ),
             MockProgramData(
                 custom_properties={
-                    'category': ['Soccer'],
+                    'categories': ['Soccer'],
                     'start_time': datetime(2026, 3, 1, 15, 0, 0)
                 }
             ),
             MockProgramData(
                 custom_properties={
-                    'category': ['Rugby league'],
+                    'categories': ['Rugby league'],
                     'start_time': datetime(2026, 2, 28, 17, 0, 0)
                 }
             ),
             MockProgramData(
                 custom_properties={
-                    'category': ['Rugby league'],
+                    'categories': ['Rugby league'],
                     'start_time': datetime(2026, 3, 1, 17, 0, 0)
                 }
             )
@@ -270,7 +272,7 @@ class TestSportsEnrichment:
         for category in sports_categories:
             programme = MockProgramData(
                 custom_properties={
-                    'category': [category],
+                    'categories': [category],
                     'start_time': datetime(2026, 2, 28, 15, 0, 0)
                 }
             )
@@ -335,7 +337,7 @@ class TestPreviouslyShownLogic:
     def test_non_new_programme_gets_previously_shown(self):
         """Test non-new programme gets previously_shown flag."""
         programme = MockProgramData(
-            custom_properties={'category': ['Series']}
+            custom_properties={'categories': ['Series']}
         )
         
         changes = self.plugin.enrich_programme(programme)
@@ -346,7 +348,7 @@ class TestPreviouslyShownLogic:
         """Test new programme does not get previously_shown flag."""
         programme = MockProgramData(
             custom_properties={
-                'category': ['Series'],
+                'categories': ['Series'],
                 'new': True
             }
         )
@@ -370,12 +372,150 @@ class TestPreviouslyShownLogic:
         plugin = EnrichmentPlugin({'auto_mark_previously_shown': False})
         
         programme = MockProgramData(
-            custom_properties={'category': ['Series']}
+            custom_properties={'categories': ['Series']}
         )
         
         changes = plugin.enrich_programme(programme)
         
         assert 'previously_shown' not in changes
+
+
+class TestDryRunMode:
+    """Test dry-run mode — verifies plugin never writes to the DB when dry_run_mode=True."""
+
+    def setup_method(self):
+        self.plugin = EnrichmentPlugin()
+
+    def test_dry_run_default_is_false(self):
+        """dry_run_mode defaults to False (plugin is active on install)."""
+        assert self.plugin.dry_run_mode is False
+
+    def test_dry_run_enabled_via_config(self):
+        """dry_run_mode can be enabled via config dict."""
+        plugin = EnrichmentPlugin({'dry_run_mode': True})
+        assert plugin.dry_run_mode is True
+
+    def test_enrich_programme_returns_changes_in_dry_run(self):
+        """enrich_programme() is pure — it still returns changes dict in dry-run mode."""
+        plugin = EnrichmentPlugin({'dry_run_mode': True})
+        programme = MockProgramData(
+            custom_properties={'categories': ['Series'], 'onscreen_episode': 'S2E36'}
+        )
+        changes = plugin.enrich_programme(programme)
+        assert changes['season'] == 2
+        assert changes['episode'] == 36
+
+    def test_enrich_programme_does_not_mutate_object(self):
+        """enrich_programme() must not write to the programme object (DB write happens in _enrich_all)."""
+        plugin = EnrichmentPlugin({'dry_run_mode': True})
+        programme = MockProgramData(
+            custom_properties={'categories': ['Series'], 'onscreen_episode': 'S2E36'}
+        )
+        original = dict(programme.custom_properties)
+        plugin.enrich_programme(programme)
+        assert programme.custom_properties == original
+
+    def _make_mock_context(self, programmes):
+        """Helper: build a mock ProgramData queryset and context dict."""
+        mock_qs = MagicMock()
+        mock_qs.count.return_value = len(programmes)
+        mock_qs.__iter__ = lambda self: iter(programmes)
+        mock_pd = MagicMock()
+        mock_pd.objects.select_related.return_value.all.return_value = mock_qs
+        mock_epg_models = MagicMock()
+        mock_epg_models.ProgramData = mock_pd
+        return mock_pd, mock_epg_models, {'logger': MagicMock()}
+
+    def test_dry_run_skips_bulk_update(self):
+        """In dry-run mode, ProgramData.objects.bulk_update must NOT be called."""
+        plugin = EnrichmentPlugin({'dry_run_mode': True})
+        mock_programme = MagicMock()
+        mock_programme.custom_properties = {'categories': ['Series'], 'onscreen_episode': 'S2E36'}
+        mock_programme.title = 'Test Show'
+        mock_programme.id = 1
+
+        mock_pd, mock_epg_models, context = self._make_mock_context([mock_programme])
+
+        with patch.dict(sys.modules, {
+            'apps': MagicMock(), 'apps.epg': MagicMock(), 'apps.epg.models': mock_epg_models
+        }):
+            result = plugin._enrich_all_programmes(context)
+
+        mock_pd.objects.bulk_update.assert_not_called()
+        assert result['dry_run'] is True
+        assert result['stats']['enriched'] >= 1
+
+    def test_live_mode_calls_bulk_update(self):
+        """In live mode (dry_run=False), bulk_update IS called when there are changes."""
+        plugin = EnrichmentPlugin({'dry_run_mode': False})
+        mock_programme = MagicMock()
+        mock_programme.custom_properties = {'categories': ['Series'], 'onscreen_episode': 'S2E36'}
+        mock_programme.title = 'Test Show'
+        mock_programme.id = 1
+
+        mock_pd, mock_epg_models, context = self._make_mock_context([mock_programme])
+
+        with patch.dict(sys.modules, {
+            'apps': MagicMock(), 'apps.epg': MagicMock(), 'apps.epg.models': mock_epg_models
+        }):
+            result = plugin._enrich_all_programmes(context)
+
+        mock_pd.objects.bulk_update.assert_called_once()
+        assert result['dry_run'] is False
+
+    def test_dry_run_stats_still_reported(self):
+        """Dry-run mode must still compute and return enrichment stats (log without writing)."""
+        plugin = EnrichmentPlugin({'dry_run_mode': True})
+        mock_programme = MagicMock()
+        mock_programme.custom_properties = {'categories': ['Series'], 'onscreen_episode': 'S3E12'}
+        mock_programme.title = 'Test Show'
+        mock_programme.id = 1
+
+        mock_pd, mock_epg_models, context = self._make_mock_context([mock_programme])
+        mock_logger = MagicMock()
+        context['logger'] = mock_logger
+
+        with patch.dict(sys.modules, {
+            'apps': MagicMock(), 'apps.epg': MagicMock(), 'apps.epg.models': mock_epg_models
+        }):
+            result = plugin._enrich_all_programmes(context)
+
+        assert 'stats' in result
+        assert result['stats']['total'] == 1
+        assert result['stats']['enriched'] == 1
+        mock_logger.info.assert_called()  # stats must be logged even in dry-run
+
+
+class TestMalformedInput:
+    """Tests for malformed / edge-case input that must not crash the plugin."""
+
+    def setup_method(self):
+        self.plugin = EnrichmentPlugin()
+
+    def test_parse_none_returns_none(self):
+        assert self.plugin.parse_episode_string(None) is None
+
+    def test_parse_empty_string_returns_none(self):
+        assert self.plugin.parse_episode_string("") is None
+
+    def test_parse_not_an_episode_returns_none(self):
+        assert self.plugin.parse_episode_string("not_an_episode") is None
+
+    def test_enrich_programme_with_none_custom_properties(self):
+        """enrich_programme must not crash when custom_properties is None."""
+        programme = MockProgramData()
+        programme.custom_properties = None
+        result = self.plugin.enrich_programme(programme)
+        assert isinstance(result, dict)
+
+    def test_enrich_programme_with_garbage_onscreen_episode(self):
+        """enrich_programme must not crash and must not set season/episode on garbage input."""
+        programme = MockProgramData(
+            custom_properties={'categories': ['Series'], 'onscreen_episode': '!!!GARBAGE!!!'}
+        )
+        result = self.plugin.enrich_programme(programme)
+        assert 'season' not in result
+        assert 'episode' not in result
 
 
 class TestBulkOperations:
@@ -391,7 +531,7 @@ class TestBulkOperations:
         programmes = [
             MockProgramData(
                 custom_properties={
-                    'category': ['Series'],
+                    'categories': ['Series'],
                     'onscreen_episode': f'S1E{i}'
                 }
             )
@@ -410,9 +550,9 @@ class TestBulkOperations:
     def test_enrich_batch_preserves_order(self):
         """Test that batch enrichment preserves programme order."""
         programmes = [
-            MockProgramData(custom_properties={'category': ['Series']}),
-            MockProgramData(custom_properties={'category': ['Movies']}),
-            MockProgramData(custom_properties={'category': ['Series']}),
+            MockProgramData(custom_properties={'categories': ['Series']}),
+            MockProgramData(custom_properties={'categories': ['Movies']}),
+            MockProgramData(custom_properties={'categories': ['Series']}),
         ]
         
         results = self.plugin.enrich_batch(programmes)
@@ -433,7 +573,7 @@ class TestBulkOperations:
         programmes = [
             MockProgramData(
                 custom_properties={
-                    'category': ['Series'],
+                    'categories': ['Series'],
                     'onscreen_episode': 'S2E5'
                 }
             )

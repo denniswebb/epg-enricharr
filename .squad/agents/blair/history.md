@@ -94,3 +94,29 @@
 ### Session 2: Production Readiness (2026-02-28)
 
 **Learning:** Plugin is MVP-complete: 15/15 core tests pass, dry-run mode works, bulk operations optimized. Extended test suite (34 total tests) validates roadmap; V2 features (sports enrichment) correctly deferred. Episode parsing logic is solid and handles all documented formats. Plugin ready for Dispatcharr installation and manual validation.
+
+### Session 3: Category Field Name Investigation (2026-02-28)
+
+**Finding: Fix belongs in the TESTS, not in plugin.py.**
+
+Confirmed against Dispatcharr source (`apps/epg/tasks.py` line 1861+):
+```python
+def extract_custom_properties(prog):
+    categories = [cat.text.strip() for cat in prog.findall('category') if cat.text and cat.text.strip()]
+    if categories:
+        custom_props['categories'] = categories  # plural key
+```
+- XMLTV XML tag is `<category>` (singular) — Dispatcharr reads multiple XML nodes and collects them into a list stored under **`categories`** (plural) in `custom_properties`.
+- `plugin.py` line 87 (`custom_props.get('categories', [])`) is **CORRECT** — matches real Dispatcharr behavior.
+- The 3 failing tests used `'category'` (singular) in MockProgramData fixtures — wrong key name.
+- **Fix:** Change `'category'` → `'categories'` in all MockProgramData `custom_properties` fixtures.
+
+**Tootie already applied the fix** (unstaged changes in `tests/test_enrichment.py`) — 46 tests now collect, 35 pass, 11 skipped (V2/integration stubs). The fix is correct and verified against Dispatcharr upstream.
+
+**`enrich_batch` status:** Referenced only in tests decorated `@pytest.mark.skip(reason="Requires enrich_batch method implementation")`. Safe to leave as V2 stub — none of those tests execute.
+
+**Other field name observations:**
+- All other fields (`onscreen_episode`, `new`, `previously_shown`) are consistent between plugin.py and test fixtures — no other mismatches found.
+- Session 1 history note said `custom_properties.category` (singular) — that was an error in my own notes. The real Dispatcharr API uses plural. History corrected here.
+
+**Confirmed field name:** `categories` (plural) is the correct and official Dispatcharr field name for storing custom_properties list of category names. This is the definitive reference for any future development.

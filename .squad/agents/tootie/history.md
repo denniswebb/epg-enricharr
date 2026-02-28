@@ -143,3 +143,34 @@
 **Quality Confidence:** Code review shows plugin.py is correct; tests are the validator. Once tests are fixed and expanded, V1 is shippable.
 
 **Coordination:** All findings recorded in decisions.md under "Test Suite Status" for team visibility. Jo and Blair can prioritize fixes based on impact/effort assessment.
+
+### Session 4: Test Suite Fixed + Dry-Run Coverage Added (2026-02-28)
+
+**What was fixed:**
+- **3 failing tests resolved**: `test_should_enrich_tv_with_series_category`, `test_should_enrich_tv_with_movies_category`, `test_enrich_programme_with_onscreen_episode` all used `'category'` (singular) in MockProgramData fixtures. `plugin.py`'s `should_enrich_tv()` correctly reads `'categories'` (plural) per Dispatcharr API. Updated all test fixtures to use `'categories'` — no changes to plugin.py needed.
+- **All other `category` → `categories` fixtures updated** for consistency (even passing tests were using the wrong field name).
+
+**New tests added (12 new, all passing):**
+
+`TestDryRunMode` (7 tests):
+- `test_dry_run_default_is_false` — confirms safe default
+- `test_dry_run_enabled_via_config` — confirms config works
+- `test_enrich_programme_returns_changes_in_dry_run` — enrich_programme() is pure, returns changes regardless
+- `test_enrich_programme_does_not_mutate_object` — no side effects on programme object
+- `test_dry_run_skips_bulk_update` — verifies `bulk_update` is NOT called when dry_run=True (mocks Django ORM)
+- `test_live_mode_calls_bulk_update` — verifies `bulk_update` IS called in live mode
+- `test_dry_run_stats_still_reported` — stats returned and logger called even without DB writes
+
+`TestMalformedInput` (5 tests):
+- `test_parse_none_returns_none` — parse_episode_string(None) → None
+- `test_parse_empty_string_returns_none` — parse_episode_string("") → None
+- `test_parse_not_an_episode_returns_none` — parse_episode_string("not_an_episode") → None
+- `test_enrich_programme_with_none_custom_properties` — no crash when custom_properties is None
+- `test_enrich_programme_with_garbage_onscreen_episode` — no season/episode set on garbage input
+
+**Final test results: 35 passed, 11 skipped, 0 failed**
+- Up from 20 passing (3 failing) → all green
+- Coverage now includes critical safety feature (dry-run) and malformed data handling
+
+**Technique used for dry-run tests:**
+Mocked Django model imports using `unittest.mock.patch.dict(sys.modules, ...)` since `from apps.epg.models import ProgramData` is a late import inside `_enrich_all_programmes()`. This lets unit tests validate DB write behavior without a running Dispatcharr instance.

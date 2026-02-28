@@ -224,3 +224,32 @@
 **Endpoints:**
 - Enable: `http://{DISPATCHARR_HOST}/api/plugins/plugins/epg-enricharr-1_0_0/enabled/`
 - Reload: `POST http://{DISPATCHARR_HOST}/api/plugins/plugins/reload/`
+
+---
+
+### 2026-02-28T17:39:42Z: Test Suite Fixed — Category Field & Coverage Expansion
+
+**By:** Tootie (Tester)  
+
+**Status:** ✅ RESOLVED — 35 passing, 0 failing, 11 skipped. Coverage ~85%.
+
+**What was fixed:**
+1. **Test fixture field name:** All MockProgramData fixtures updated from `'category'` (singular) to `'categories'` (plural) to match real Dispatcharr API behavior. Confirmed by Blair against upstream source (`apps/epg/tasks.py` line 1861+).
+2. **Dry-run mode coverage:** Added 7 tests validating that dry_run_mode=true prevents database writes, returns changes dict without mutations, and still reports stats. This critical safety feature had 0% coverage.
+3. **Malformed input handling:** Added 5 tests for None/empty/garbage inputs to ensure plugin never crashes on bad EPG data.
+
+**Impact:** Test-related V1 blocker resolved. Plugin code (`plugin.py` line 87) was correct all along — issue was in test fixtures only.
+
+**Effective coverage:** Improved from 50-80% to ~85%. All core features now validated. Bulk operations and integration tests remain skipped (V2/setup dependencies).
+
+---
+
+### 2026-02-28T17:39:42Z: Field Name Verification — Dispatcharr API Alignment
+
+**By:** Blair (Backend)  
+
+**Finding:** Confirmed `categories` (plural) is the correct field name in Dispatcharr's custom_properties structure. XMLTV has singular `<category>` XML tags, but Dispatcharr's `extract_custom_properties()` collects them into a list under the plural key `categories`.
+
+**Plugin status:** `plugin.py` line 87 (`custom_props.get('categories', [])`) is **CORRECT** and matches real Dispatcharr behavior. No code changes needed.
+
+**V2 deferred features:** `enrich_batch()` method is referenced only in skipped tests. Safe to leave unimplemented for V2.
