@@ -11,12 +11,17 @@ from typing import Optional, Tuple, Dict, Any
 logger = logging.getLogger(__name__)
 
 
-class EnrichmentPlugin:
+class Plugin:
     """Dispatcharr plugin to enrich EPG custom_properties with season/episode metadata."""
     
     name = "EPG Enricharr"
     version = "1.0.0"
     description = "Enrich EPG data for Plex DVR recognition"
+    
+    # Declare event subscriptions for Dispatcharr plugin system
+    event_handlers = {
+        'epg_refresh': 'on_epg_refresh',
+    }
     
     # Episode format patterns
     EPISODE_PATTERNS = [
@@ -240,3 +245,14 @@ class EnrichmentPlugin:
             "version": self.version,
             "description": self.description
         }
+    
+    def on_epg_refresh(self, **kwargs):
+        """Handle EPG refresh event - auto-trigger enrichment."""
+        logger.info("EPG refresh event received, triggering enrichment...")
+        try:
+            result = self._enrich_all_programmes(kwargs)
+            logger.info(f"EPG enrichment completed: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Error during EPG enrichment: {e}", exc_info=True)
+            return {'status': 'error', 'error': str(e)}
