@@ -35,7 +35,7 @@ echo "✅ Development environment ready"
 description = "Remove build artifacts"
 run = """
 echo "Cleaning build artifacts..."
-rm -rf ./build epg-enricharr-1.0.0.zip epg-enricharr-2.0.0.zip
+rm -rf ./build epg-enricharr-*.zip
 echo "✅ Clean complete"
 """
 
@@ -43,29 +43,30 @@ echo "✅ Clean complete"
 description = "Generate plugin zip package"
 depends = ["clean"]
 run = """
-VERSION=2.0.0
+VERSION=$(python3 -c "import json; print(json.load(open('plugin.json'))['version'])")
 PLUGIN_NAME=epg-enricharr
 BUILD_DIR=./build
 
 echo "Building plugin zip..."
-mkdir -p "$BUILD_DIR/$PLUGIN_NAME-$VERSION"
-cp plugin.json "$BUILD_DIR/$PLUGIN_NAME-$VERSION/"
-cp plugin.py "$BUILD_DIR/$PLUGIN_NAME-$VERSION/"
-cp README.md "$BUILD_DIR/$PLUGIN_NAME-$VERSION/"
-cp LICENSE "$BUILD_DIR/$PLUGIN_NAME-$VERSION/" 2>/dev/null || echo "No LICENSE file"
-mkdir -p "$BUILD_DIR/$PLUGIN_NAME-$VERSION/tests"
-cp tests/test_enrichment.py "$BUILD_DIR/$PLUGIN_NAME-$VERSION/tests/" 2>/dev/null || echo "No test file"
-mkdir -p "$BUILD_DIR/$PLUGIN_NAME-$VERSION/tests/fixtures"
-cp tests/fixtures/*.xml "$BUILD_DIR/$PLUGIN_NAME-$VERSION/tests/fixtures/" 2>/dev/null || echo "No fixture files"
-cd "$BUILD_DIR" && zip -r ../"$PLUGIN_NAME-$VERSION.zip" "$PLUGIN_NAME-$VERSION" > /dev/null
+mkdir -p "$BUILD_DIR/$PLUGIN_NAME"
+cp plugin.json "$BUILD_DIR/$PLUGIN_NAME/"
+cp plugin.py "$BUILD_DIR/$PLUGIN_NAME/"
+cp README.md "$BUILD_DIR/$PLUGIN_NAME/"
+cp LICENSE "$BUILD_DIR/$PLUGIN_NAME/" 2>/dev/null || echo "No LICENSE file"
+mkdir -p "$BUILD_DIR/$PLUGIN_NAME/tests"
+cp tests/test_enrichment.py "$BUILD_DIR/$PLUGIN_NAME/tests/" 2>/dev/null || echo "No test file"
+mkdir -p "$BUILD_DIR/$PLUGIN_NAME/tests/fixtures"
+cp tests/fixtures/*.xml "$BUILD_DIR/$PLUGIN_NAME/tests/fixtures/" 2>/dev/null || echo "No fixture files"
+cd "$BUILD_DIR" && zip -r ../"$PLUGIN_NAME-$VERSION.zip" "$PLUGIN_NAME" > /dev/null
 echo "✅ Plugin zip created: $PLUGIN_NAME-$VERSION.zip"
 """
 
 [tasks.validate]
 description = "Validate plugin zip structure and tests"
 run = """
+VERSION=$(python3 -c "import json; print(json.load(open('plugin.json'))['version'])")
 echo "Validating plugin..."
-python3 validation.py epg-enricharr-2.0.0.zip
+python3 validation.py "epg-enricharr-$VERSION.zip"
 """
 
 [tasks.setup-dispatcharr]
@@ -93,7 +94,8 @@ description = "Install plugin to local Dispatcharr"
 depends = ["test-zip"]
 run = """
 DISPATCHARR_PLUGIN_DIR="${DISPATCHARR_PLUGIN_DIR:=$HOME/.dispatcharr/plugins}"
-ZIP_FILE="epg-enricharr-1.0.0.zip"
+VERSION=$(python3 -c "import json; print(json.load(open('plugin.json'))['version'])")
+ZIP_FILE="epg-enricharr-$VERSION.zip"
 
 echo "Installing plugin to local Dispatcharr..."
 if [ -d "$DISPATCHARR_PLUGIN_DIR" ]; then
