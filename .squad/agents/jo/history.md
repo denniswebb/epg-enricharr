@@ -12,6 +12,32 @@
 
 ## Learnings
 
+### 🔖 Core Context
+
+**Leadership Principles (Sessions 1–7):**
+
+1. **Scope as Blocker Prevention:** Clear, documented scope decisions allow team parallelization. Decisions recorded BEFORE work starts prevent rework.
+2. **Quality Gates:** All agents self-validate locally before handoff. Code review (not just approval) catches non-obvious gaps.
+3. **Non-Blocking Gaps:** Differentiate between must-fix blockers (test failures, import errors) and quality-of-life improvements (weak assertions, missing parity tests). Flag the latter; let the agent decide.
+4. **Verification vs. Statistics:** Data mutation fixes require verification of the actual data, not proxy metrics (e.g., 0-error counts). See Mrs. Garrett's v2.0.1 vs v2.0.2 smoke tests.
+5. **Test Assertion Contracts:** Assertions should reflect the actual code contract. Permissive guards (`if key in dict:`) hide bugs. Specific assertions improve confidence.
+
+**Decision Patterns:**
+- Spec-first approach (Blair's onscreen_episode decision) → clean review, no ambiguity
+- Three-layer testing (unit/integration/manual) maps to team roles naturally
+- Settings defaults should be production-ready (dry_run: false, features enabled)
+- Out-of-scope list prevents scope creep; documented and referenced in reviews
+
+**Team Dynamics:**
+- Parallel work is possible with clear scope boundaries
+- Tech lead (Jo) gates quality; gating criteria should be explicit
+- Non-blocking observations still have value — they guide next iterations
+- Orchestration logs + decision records = memory that persists beyond sessions
+
+**Current Status (End Session 7):** V1 complete and shipped. V2 implementation done (onscreen_episode fix verified in production). Test gaps closed. Team operating efficiently with clear decision/review/execution flow.
+
+---
+
 ### Session 1: Initial Scope Decisions (2025-02-27)
 
 **Scope Clarifications:**

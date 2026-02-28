@@ -16,6 +16,50 @@
 
 ## Learnings
 
+### 🔖 Core Context
+
+**Key Implementation Patterns (Sessions 1–6):**
+
+**V1 TV Parsing:**
+- Episode parsing: regex patterns S##E##, s##e##, ##x##, case-insensitive, zero-padded
+- Returns 1-based integers (season, episode) or None for invalid input
+- Validation: season > 0, episode > 0 to avoid S0E0 edge cases
+- Field name: `onscreen_episode` for display; auto-generated as `S{season}E{episode}`
+
+**V2 Sports/News Enrichment:**
+- Format string approach: {YYYY}, {YY}, {MM}, {DD}, {hh}, {mm}, {channel} tokens
+- Numeric channel only: integer channel_id or numeric string; non-numeric silently omitted
+- Fallback chain: If EPG has season+episode → use as-is. Else generate from templates.
+- Onscreen episode: Always write `S{season}E{episode}` for display consistency
+- Season int conversion failure → graceful fallback: write episode-only, no `S` prefix
+
+**Django Integration:**
+- `ProgramData.custom_properties` is JSONField — update in-place, bulk_update for efficiency
+- `select_related('epg')` reduces query count
+- Bulk operations: batch size 1000 for performance
+- Late model import allows testing outside Dispatcharr
+
+**Data Structure Lessons:**
+- Field names: `categories` (plural, list) not `category` (singular)
+- API structure: `channel_id`, `start` (datetime), `custom_properties` (jsonb)
+- XMLTV output reads from custom_properties keys: season, episode, onscreen_episode, previously_shown
+- Dispatcharr fallback logic: if onscreen_episode absent, uses `E{episode}` (no season) — this is why we must write onscreen_episode
+
+**Bug-Fix Patterns:**
+- Preserve-path gap: When programme has existing season+episode but missing onscreen_episode, regenerate it with guard: `if not custom_props.get('onscreen_episode')`
+- Test fix patterns: Use preserve tests (`.get(key, default) == default`) to catch overwrites
+- Verification: Always query actual database for format fixes; statistics (0-error counts) are insufficient
+
+**Configuration Design:**
+- Per-strategy format strings: sports_season_format, sports_episode_format, news_season_format, news_episode_format
+- Feature flags: enable_tv_enrichment, enable_sports_enrichment, enable_news_enrichment
+- Defaults: TV enabled, sports/news disabled (V1 ships with TV only)
+- Dry-run mode: Prevents database writes, returns changes dict for inspection
+
+**Current Status (End Session 6):** V1 shipped and verified. V2 implemented with format strings, classification, and regeneration logic. Production verification (v2.0.2) confirmed onscreen_episode format in database. Team patterns: spec-first design, test-driven validation, database verification for format fixes.
+
+---
+
 ### Session 1: Core Plugin Implementation (2025-02-27)
 
 **Architecture decisions:**

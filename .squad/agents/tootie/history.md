@@ -17,6 +17,35 @@
 
 ## Learnings
 
+### 🔖 Core Context
+
+**Key Learnings Archive (Sessions 1–6):**
+
+**V1 Test Suite (35 tests):**
+- Episode parsing: S2E36, S01E01, 2x14, edge cases covered
+- Previously-shown detection: non-new content flagging
+- MockProgramData fixture design: matches Dispatcharr API structure (categories plural, start datetime, channel_id int/str/None)
+- Coverage: ~85% of parsing logic
+
+**V2 Test Suite (38 tests):**
+- Format tokens: {YYYY}, {YY}, {MM}, {DD}, {hh}, {mm}, {channel}
+- Token testing: use fixed datetime `datetime(2026, 3, 15, 19, 30)` (eliminates live-date dependencies)
+- Category classification: Movie, Sports, News, TV routing
+- Enrichment paths: generated vs. existing season/episode branches
+- Preserve tests: `.get(key, default) == default` pattern catches overwrites; tolerates "not written" outcomes
+- Test assertions: should reflect actual contract, not use permissive guards (`if key in dict:`)
+- Error handling: malformed input, invalid regex patterns, graceful failures
+
+**Patterns & Tools:**
+- MockProgramData: Reusable fixture factory for test data
+- Plugin config: Settings dict for feature toggling during tests
+- Key insight: {channel} is numeric-only; non-numeric silently omitted
+- Key insight: When only season OR episode exists (not both), BOTH are regenerated from templates
+
+**Current Status (End Session 7):** 73 tests (35 V1 + 38 V2), 11 skipped, 0 failed. ~85% coverage.
+
+---
+
 ### Session 5: V2 Test Suite Added (Current)
 
 **What was added (30 new tests, all passing):**

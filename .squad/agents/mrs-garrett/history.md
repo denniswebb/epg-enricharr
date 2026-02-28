@@ -17,6 +17,49 @@
 
 ## Learnings
 
+### 🔖 Core Context
+
+**Deployment Patterns (Sessions 1–6):**
+
+**Plugin Deployment Phases:**
+1. **Build:** Create zip artifact with correct plugin.json + plugin.py
+2. **Import:** POST to `/api/plugins/plugins/import/` with multipart file
+3. **Enable:** POST to `/api/plugins/plugins/{key}/enabled/` with `{"enabled":true}`
+4. **Configure:** POST to `/api/plugins/plugins/{key}/settings/` with feature flags
+5. **Reload:** POST to `/api/plugins/plugins/reload/` to activate system-wide
+6. **Verify:** Query Dispatcharr for plugin status and data mutation results
+
+**API Infrastructure:**
+- Dispatcharr 0.19.0 uses PostgreSQL (not SQLite)
+- Plugin REST endpoints at `/api/plugins/plugins/`
+- Auth: Bearer token in Authorization header (from Django SECRET_KEY)
+- Token lifecycle: 24 hours; refresh via Django shell if expired
+
+**Data Verification Procedures:**
+- Metrics check (0 errors, enriched count): necessary but not sufficient
+- Actual field sampling: Must query database for sample rows showing correct format
+- Database access: SSH to Unraid host → `docker exec Dispatcharr psql -U dispatch -d dispatcharr`
+- Smoke test structure: Deploy → Enrich → Query → Verify field values in sample rows
+
+**Key Finding — Verification Failure Mode (v2.0.1 → v2.0.2):**
+- v2.0.1 smoke test used metrics as proxy (0 errors + enriched count) — insufficient
+- v2.0.2 smoke test added actual database sampling of `custom_properties` fields
+- Lesson: Always inspect the actual mutated data after deployment, not just statistics
+- Format verification query: `SELECT custom_properties->>'onscreen_episode' FROM epg_programdata WHERE ... LIKE 'S%'` → should be 100%
+
+**Dispatcharr 0.19.0 Behavior Changes:**
+- Plugin key format changed: `epg-enricharr-2.0.2.zip` now imports with key `epg-enricharr`, NOT versioned suffix
+- Future deploys target base key `epg-enricharr` for both enable and settings endpoints
+
+**Mise Integration:**
+- Task runners: `mise run test-zip`, `mise run enable-plugin`, `mise run reload-plugins`
+- env.example + env tracking for Dispatcharr auth token, host, port
+- Automation first: All deploy steps scripted in mise; no manual API calls needed
+
+**Current Status (End Session 6):** Local dev tooling complete. Two plugin versions deployed and verified in production (v2.0.1 preliminary, v2.0.2 with data verification). Smoke test procedure documented and proven. Team can deploy and validate independently.
+
+---
+
 ### Docker vs Native Setup (Decision: Native-First with Docker Option)
 
 - **Choice:** Native Python venv setup is the primary bootstrap, with optional Docker for Dispatcharr instance.
