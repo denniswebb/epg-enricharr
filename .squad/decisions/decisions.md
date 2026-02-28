@@ -16,3 +16,15 @@
 Both require Bearer token (JWT) and instance URL. Parameterized by .env (DISPATCHARR_HOST, DISPATCHARR_AUTH_TOKEN)  
 **Why:** Automate plugin deployment so agents can self-validate on test instance  
 **Impact:** Mrs. Garrett adds `mise run deploy-plugin` task with curl automation; credentials stored in .env
+
+### 2026-02-28T19:00Z: User directive — partial EPG season/episode handling
+
+**By:** Dennis (via Copilot)  
+**What:** Generate whichever field is missing, keep whichever is present.
+  - Has season AND episode → use both as-is
+  - Has season but NO episode → keep EPG season, generate episode from template
+  - Has episode but NO season → keep EPG episode, generate season from template
+  - Has neither → generate both from templates
+Movies are always skipped before reaching any of these checks.  
+**Why:** User request — EPG can provide partial metadata; we should fill gaps, not discard what's there  
+**Impact:** Implementation begins next session with EPG enrichment logic updated
