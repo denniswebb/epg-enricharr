@@ -83,3 +83,10 @@
 - Sequential episode ordinals within sport+season
 - Requires sport-specific logic (different for Soccer vs Rugby vs NBA)
 - Settings stubbed but disabled by default
+
+**Parallel work note:**
+- Tootie has written additional test classes (TestSportsEnrichment, TestBulkOperations, TestIntegration) in parallel
+- These tests expect V2 features (sports) and APIs (enrich_batch) not in MVP scope
+- Core MVP tests (TestEnrichmentPlugin) all pass: 15/15 ✅
+- Failed tests are expected — they're testing unimplemented V2 features per Jo's scope decision
+- Integration tests are skipped (waiting for Mrs. Garrett's Dispatcharr env)
