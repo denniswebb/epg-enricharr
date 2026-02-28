@@ -844,6 +844,23 @@ class TestEnrichProgrammeV2:
         # onscreen_episode not overwritten with a newly generated value
         assert changes.get('onscreen_episode', existing_onscreen) == existing_onscreen
 
+    def test_news_existing_epg_preserves_onscreen_episode(self):
+        """News existing EPG path: both season+episode present → onscreen_episode not re-generated; original preserved."""
+        existing_onscreen = 'S2025E0101'
+        p = MockProgramData(
+            custom_properties={
+                'categories': ['News'],
+                'season': 2025,
+                'episode': '0101',
+                'onscreen_episode': existing_onscreen,
+            },
+            start=self.dt,
+        )
+        changes = self.news_plugin.enrich_programme(p)
+        assert changes['season'] == 2025
+        assert changes['episode'] == '0101'
+        assert changes.get('onscreen_episode', existing_onscreen) == existing_onscreen
+
     def test_sports_season_format_failure_writes_episode_no_crash(self):
         """Season format produces non-int value → no crash; episode still written; onscreen_episode not crashing."""
         plugin = EnrichmentPlugin({
@@ -856,9 +873,9 @@ class TestEnrichProgrammeV2:
         assert 'season' not in changes
         # Episode should still be generated
         assert 'episode' in changes
-        # onscreen_episode either omitted or episode-only — must not raise
-        if 'onscreen_episode' in changes:
-            assert changes['onscreen_episode']  # non-empty if present
+        # Season failed → onscreen_episode falls back to episode-only value
+        assert 'onscreen_episode' in changes
+        assert changes['onscreen_episode'] == '03151930'
 
     def test_sports_existing_epg_no_onscreen_episode_gets_written(self):
         """Regression: sports with existing season+episode but NO onscreen_episode →

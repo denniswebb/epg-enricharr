@@ -159,3 +159,15 @@
 - `test_sports_season_format_failure_writes_episode_no_crash` has a permissive `if 'onscreen_episode' in changes:` guard — should assert presence unconditionally since the code always writes it in that path
 
 **Pattern:** Blair's spec-first decision (`.squad/decisions/inbox/blair-onscreen-episode-season.md`) precisely matched the implementation — no ambiguity, fast review.
+
+### Session 9: Test Gap Closure Review (2026-02-28)
+
+**Context:** Tootie addressed two non-blocking gaps flagged in Session 8 review: missing news preserve test, and a permissive assertion in the season-format-failure test.
+
+**Verdict:** ✅ APPROVED — Both changes are correct and well-formed. All 17 V2 tests pass.
+
+**What was reviewed:**
+1. `test_news_existing_epg_preserves_onscreen_episode` — Correctly mirrors the sports preserve test. Uses `.get('onscreen_episode', existing_onscreen) == existing_onscreen` which is the right semantics for a preserve test: fails if the existing value is overwritten, passes if it's untouched or echoed back unchanged.
+2. `test_sports_season_format_failure_writes_episode_no_crash` — Strengthened from a permissive `if 'onscreen_episode' in changes:` guard to two unconditional assertions: presence (`assert 'onscreen_episode' in changes`) and specific value (`assert changes['onscreen_episode'] == '03151930'`). The fallback value `'03151930'` is correct for `datetime(2026, 3, 15, 19, 30)` with default `sports_episode_format: {MMDDhhmm}`.
+
+**Pattern confirmed:** The `.get(key, default) == default` pattern is the right assertion shape for "preserve" tests. It correctly catches overwrites while tolerating both "not written" and "written with same value" outcomes.

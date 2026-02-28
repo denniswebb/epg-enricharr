@@ -252,3 +252,46 @@ Mocked Django model imports using `unittest.mock.patch.dict(sys.modules, ...)` s
 assert changes.get('onscreen_episode', existing_onscreen) == existing_onscreen
 ```
 This passes whether the key is absent from changes (not overwritten) or explicitly set to the same value — both are acceptable "not overwritten" behaviors.
+
+### Session 6: Test Gap Fill (Current)
+
+**What was added (2 targeted changes):**
+
+`TestEnrichProgrammeV2` gaps filled:
+
+1. **`test_news_existing_epg_preserves_onscreen_episode`** (new test after line 845):
+   - Mirrors sports equivalent; uses `MockProgramData` directly with `{'categories': ['News'], 'season': 2025, 'episode': '0101', 'onscreen_episode': 'S2025E0101'}` and `self.news_plugin`
+   - Confirms: existing `onscreen_episode` is NOT overwritten when both season+episode already present
+
+2. **`test_sports_season_format_failure_writes_episode_no_crash`** (strengthened):
+   - Weak assertion `assert changes['onscreen_episode']  # non-empty if present` replaced with specific value assertion
+   - Key insight from plugin.py: when season int-conversion fails, the else-branch sets `changes['onscreen_episode'] = changes['episode']` (episode-only fallback)
+   - With `_sports_prog(channel_id=None)` + `dt=datetime(2026, 3, 15, 19, 30)` → episode = `'03151930'` → onscreen_episode = `'03151930'`
+   - Also strengthened: `if 'onscreen_episode' in changes` guard removed; `onscreen_episode` is ALWAYS set in the else-branch, so assertion is now unconditional
+
+**Final test counts: 73 passed, 11 skipped, 0 failed**
+
+---
+
+## Session 7: Test Gap Closure (Session 6 Continuation)
+
+**Date:** 2026-02-28  
+**Event:** Jo's code review flagged two test gaps. Tootie filled both.
+
+**Gaps Closed:**
+
+1. **`test_news_existing_epg_preserves_onscreen_episode`** — News parity missing
+   - Added new test mirroring sports version
+   - Verifies existing `onscreen_episode` is NOT overwritten
+   - Result: ✅ PASS
+
+2. **`test_sports_season_format_failure_writes_episode_no_crash`** — Weak assertion
+   - Changed from permissive `if 'onscreen_episode' in changes: assert changes['onscreen_episode']` to specific
+   - New: `assert 'onscreen_episode' in changes` + `assert changes['onscreen_episode'] == '03151930'`
+   - Rationale: else-branch ALWAYS sets onscreen_episode, so assertion is unconditional
+   - Value '03151930' derived from datetime(2026, 3, 15, 19, 30) with sports_episode_format {MMDDhhmm}
+   - Result: ✅ PASS
+
+**Test Suite:** All 17 V2 tests pass. Full suite: 73 passed, 11 skipped, 0 failed. No regressions.
+
+**Key Learning:** Test assertions should reflect the actual contract — if the code ALWAYS sets a field in a branch, the test should unconditionally assert it, not use a permissive guard. This improves confidence in both code and test.
