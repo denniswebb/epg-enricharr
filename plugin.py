@@ -139,15 +139,20 @@ class Plugin:
         Returns:
             Result dictionary with status and metrics
         """
+        logger.info(f"🔥 EPG-Enricharr.run() called with action='{action}'")
+        
         if not self.enabled:
+            logger.info("Plugin disabled, skipping")
             return {
                 'status': 'skipped',
                 'message': 'Plugin is disabled'
             }
         
         if action in ('enrich_all', 'enrich_on_epg_refresh'):
+            logger.info(f"Running enrichment for action '{action}'...")
             return self._enrich_all_programmes(context)
         
+        logger.warning(f"Unknown action: {action}")
         return {
             'status': 'error',
             'message': f'Unknown action: {action}'
@@ -164,6 +169,7 @@ class Plugin:
             Result with enrichment statistics
         """
         log = context.get('logger', logger)
+        log.info("🎯 Starting EPG enrichment...")
         
         try:
             # Import Django models (late import to avoid issues in tests)
@@ -225,7 +231,7 @@ class Plugin:
                     'stats': stats
                 }
         
-        log.info(f"Enrichment complete: {stats}")
+        log.info(f"✅ Enrichment complete: {stats}")
         
         return {
             'status': 'ok',
