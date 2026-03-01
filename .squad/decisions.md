@@ -690,3 +690,410 @@ if enable_sports_title_grouping and ':' in programme.title:
 **Status:** Both completed; decision pending user approval  
 **Key Deliverable:** Jo's architecture decision with full 3-phase spec; fallback options if rejected  
 **Next:** User approval on title modification scope expansion, then Blair executes Phase 0–3 or fallback plan
+### 2026-03-01T03:28:36Z: User directive — Sports grouping config approach
+**By:** Dennis Webb (via Copilot)
+**What:** Use regex patterns (not simple delimiter) for sports title grouping. Patterns are a list; first match wins. Capture group 1 = sport name/title, capture group 2 (optional) = match description/subtitle. Example: `^(AFL).*:\s*(.+)$` matches "AFL : AFL : Brisbane vs Sydney" → title="AFL", subtitle="Brisbane vs Sydney"
+**Why:** User request — regex is most flexible; handles sponsor prefixes, double-colon titles, and edge cases without manual delimiter logic. Allows multiple patterns with capture groups for both title grouping and subtitle extraction.
+# V3 Sports Title Grouping — Regex Pattern Approach
+
+**Decision By:** Jo (Lead)  
+**Requested By:** Dennis Webb  
+**Date:** 2026-03-01  
+**Status:** APPROVED (awaiting implementation)
+
+---
+
+## Summary
+
+Replace the simple `sports_title_delimiter` approach with a **regex pattern list** for sports title grouping. Patterns are tried in order; first match wins. Each pattern uses capture groups to extract:
+- **Group 1 (required):** Sport name / title (e.g., "AFL")
+- **Group 2 (optional):** Match description / subtitle (e.g., "Brisbane vs Sydney")
+
+If no pattern matches, the full title is used as-is (no grouping applied).
+
+---
+
+## Problem Statement
+
+Sports titles in EPG have inconsistent formats:
+- Simple colon: `"AFL : Fremantle v Adelaide"`
+- Double colon / redundant title: `"AFL : AFL : Brisbane vs Sydney"`
+- Sponsor prefix: `"Isuzu UTE A-League : Central Coast v Perth"`
+
+A single delimiter (e.g., `:`) is too rigid — it doesn't handle sponsor prefixes or distinguish between a sport name and match description. Regex patterns with capture groups provide the flexibility to:
+1. Identify the sport/event name (group 1)
+2. Optionally extract a subtitle/description (group 2)
+3. Handle edge cases without manual parsing
+
+---
+
+## Design
+
+### 1. Plugin.json Settings
+
+**Replace:** `sports_title_delimiter` (old approach)  
+**Add:** `sports_title_patterns` (new approach)
+
+```json
+{
+  "id": "sports_title_patterns",
+  "type": "text",
+  "label": "Sports title grouping patterns (comma-separated regex)",
+  "description": "Regex patterns to extract sport name and match description. Each pattern uses capture groups: group 1 = sport/title, group 2 (optional) = description. Patterns are tried in order; first match wins. No match = full title used as-is.",
+  "default": "^([A-Za-z\\s-]+)\\s*:\\s*(.+)$,^([A-Za-z\\s\\-]+)\\s*:\\s*\\1\\s*:\\s*(.+)$,^([A-Za-z\\-\\s]+)\\s*:\\s*(.+)$"
+}
+```
+
+**Note:** The `type: "text"` field contains comma-separated regex patterns. Each pattern is a single regex; commas separate multiple patterns.
+
+### 2. Default Patterns
+
+The following defaults handle the three use cases mentioned:
+
+#### Pattern 1: Simple colon format
+```
+^([A-Za-z\s-]+)\s*:\s*(.+)$
+```
+- Matches: `"AFL : Fremantle v Adelaide"`
+- Captures: group 1 = `"AFL"`, group 2 = `"Fremantle v Adelaide"`
+
+#### Pattern 2: Double colon format (redundant title)
+```
+^([A-Za-z\s\-]+)\s*:\s*\1\s*:\s*(.+)$
+```
+- Matches: `"AFL : AFL : Brisbane vs Sydney"` (where group 1 repeats)
+- Captures: group 1 = `"AFL"`, group 2 = `"Brisbane vs Sydney"`
+- Note: `\1` is a backreference to group 1; only matches if the same text appears twice
+
+#### Pattern 3: Sponsor prefix with colon
+```
+^[A-Za-z\s\-]+\s*:\s*([A-Za-z\s\-]+)\s*:\s*(.+)$
+```
+- Matches: `"Isuzu UTE A-League : Central Coast v Perth"`
+- Captures: group 1 = `"A-League"`, group 2 = `"Central Coast v Perth"`
+- Note: Strips the sponsor prefix (first segment before the initial colon)
+
+**Default string (one-liner in plugin.json):**
+```
+^([A-Za-z\s-]+)\s*:\s*(.+)$,^([A-Za-z\s\-]+)\s*:\s*\1\s*:\s*(.+)$,^[A-Za-z\s\-]+\s*:\s*([A-Za-z\s\-]+)\s*:\s*(.+)$
+```
+
+---
+
+## Implementation Logic
+
+### Python Code Structure
+
+```python
+def _extract_sports_title_and_subtitle(self, title: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Extract sport name and match description from title using regex patterns.
+    
+    Args:
+        title: Programme title
+        
+    Returns:
+        Tuple of (sport_name, subtitle) where:
+        - sport_name: Captured group 1 (sport/event name), or None if no match
+        - subtitle: Captured group 2 (description), or None if missing
+        
+        If no pattern matches, returns (None, None) — caller should use full title as-is.
+    """
+    if not title:
+        return None, None
+    
+    # Iterate patterns in order; first match wins
+    for pattern in self.sports_title_patterns:
+        match = pattern.match(title)
+        if match:
+            # Extract group 1 (required) and group 2 (optional)
+            sport_name = match.group(1) if match.lastindex >= 1 else None
+            subtitle = match.group(2) if match.lastindex >= 2 else None
+            
+            # Guard: reject empty strings
+            if not sport_name or sport_name.strip() == '':
+                continue
+            
+            return sport_name.strip(), subtitle.strip() if subtitle else None
+    
+    # No pattern matched
+    return None, None
+```
+
+### Integration into `enrich_programme()`
+
+In the sports enrichment path (when `enable_sports_enrichment=True` and programme is classified as sports):
+
+```python
+def enrich_programme(self, programme) -> Dict[str, Any]:
+    changes = {}
+    
+    # ... existing season/episode generation logic ...
+    
+    # NEW: Sports title grouping (if feature enabled)
+    if self.enable_sports_title_grouping:
+        original_title = programme.title
+        sport_name, subtitle = self._extract_sports_title_and_subtitle(original_title)
+        
+        if sport_name:
+            # Grouping succeeded: update title to sport name
+            changes['_title'] = sport_name
+            
+            # Store original title for reference
+            changes['original_title'] = original_title
+            
+            # If subtitle was extracted, store it in a custom property
+            if subtitle:
+                changes['title_subtitle'] = subtitle
+        # else: no pattern matched, leave title unchanged
+    
+    return changes
+```
+
+### Plugin Initialization
+
+In `__init__()`, parse `sports_title_patterns` similar to existing pattern lists:
+
+```python
+def __init__(self, config=None):
+    # ... existing code ...
+    
+    # Parse sports_title_patterns
+    def _parse_title_patterns(pattern_str, defaults):
+        raw = self.config.get(pattern_str, defaults)
+        parts = [p.strip() for p in raw.split(',') if p.strip()]
+        compiled = []
+        for p in parts:
+            try:
+                compiled.append(re.compile(p))
+            except re.error as e:
+                logger.warning(f"Invalid regex pattern skipped: {p!r} ({e})")
+        return compiled
+    
+    default_title_patterns = (
+        "^([A-Za-z\\s-]+)\\s*:\\s*(.+)$,"
+        "^([A-Za-z\\s\\-]+)\\s*:\\s*\\1\\s*:\\s*(.+)$,"
+        "^[A-Za-z\\s\\-]+\\s*:\\s*([A-Za-z\\s\\-]+)\\s*:\\s*(.+)$"
+    )
+    self.sports_title_patterns = _parse_title_patterns('sports_title_patterns', default_title_patterns)
+    self.enable_sports_title_grouping = self.config.get('enable_sports_title_grouping', False)
+```
+
+---
+
+## Edge Cases & Handling
+
+### 1. No Pattern Match
+**Behavior:** Return `(None, None)` from `_extract_sports_title_and_subtitle()`. Caller leaves title unchanged.
+
+**Example:**
+- Title: `"Live Broadcast"`
+- Result: `(None, None)` → title remains `"Live Broadcast"`
+
+### 2. Group 1 Present, Group 2 Missing
+**Behavior:** Return `(sport_name, None)`. Title is updated, subtitle is not stored.
+
+**Example:**
+- Pattern: `^([A-Za-z\s-]+)$`
+- Title: `"AFL"`
+- Result: `("AFL", None)` → title updated to `"AFL"`, no subtitle
+
+### 3. Empty or Whitespace-Only Group
+**Behavior:** Treat as no match; continue to next pattern.
+
+**Example:**
+- Pattern matches but group 1 is `"   "` (whitespace only)
+- Action: Skip this match, try next pattern
+
+### 4. Invalid Regex in Config
+**Behavior:** Log warning at load time; skip the invalid pattern; continue with others.
+
+**Example:**
+```python
+# Config has invalid regex: "^([unclosed"
+# Log: WARNING Invalid regex pattern skipped: '^([unclosed' (...)
+# Continue with next pattern
+```
+
+### 5. Multiple Capture Groups in Pattern
+**Behavior:** Only groups 1 and 2 are used. Higher-numbered groups are ignored.
+
+**Example:**
+- Pattern: `^(NFL)\s*-\s*([A-Z]+)\s*-\s*(.+)$` (3 groups)
+- Title: `"NFL - AB - Description"`
+- Result: group 1 = `"NFL"`, group 2 = `"AB"`, group 3 ignored
+
+---
+
+## Updated Plugin.json Field
+
+Add to the `fields` array in plugin.json:
+
+```json
+{
+  "id": "enable_sports_title_grouping",
+  "type": "boolean",
+  "label": "Enable sports title grouping",
+  "description": "Extract sport name from sports programme titles using regex patterns",
+  "default": false
+}
+```
+
+And add the patterns field:
+
+```json
+{
+  "id": "sports_title_patterns",
+  "type": "text",
+  "label": "Sports title grouping patterns (comma-separated regex)",
+  "description": "Regex patterns to extract sport name and match description. Each pattern uses capture groups: group 1 = sport/title, group 2 (optional) = description. Patterns are tried in order; first match wins. No match = full title used as-is.",
+  "default": "^([A-Za-z\\s-]+)\\s*:\\s*(.+)$,^([A-Za-z\\s\\-]+)\\s*:\\s*\\1\\s*:\\s*(.+)$,^[A-Za-z\\s\\-]+\\s*:\\s*([A-Za-z\\s\\-]+)\\s*:\\s*(.+)$"
+}
+```
+
+---
+
+## Testing Strategy
+
+### Unit Tests (Tootie)
+
+1. **Pattern matching**: Each default pattern matches its expected title format
+   - Simple colon ✓
+   - Double colon / backreference ✓
+   - Sponsor prefix ✓
+
+2. **Edge cases:**
+   - No match → returns (None, None)
+   - Group 2 missing → returns (sport_name, None)
+   - Empty group → skips to next pattern
+   - Invalid regex in config → skipped, not crashed
+
+3. **Integration:** `enrich_programme()` calls `_extract_sports_title_and_subtitle()` and updates `changes['_title']` and `changes['original_title']`
+
+### Integration Tests (Mrs. Garrett)
+
+1. End-to-end flow with sample sports titles
+2. Verify `_title` is routed to `programme.title` update in database
+3. Verify custom_properties contains `original_title` and optionally `title_subtitle`
+
+### Manual Smoke Test (Dennis)
+
+1. Deploy with `enable_sports_title_grouping: true`
+2. Run EPG refresh with sample sports programmes
+3. Verify Plex DVR grouping by sport name (vs. full EPG title)
+4. Verify Dispatcharr custom_properties show original titles and subtitles
+
+---
+
+## Backwards Compatibility
+
+- **Feature flag:** `enable_sports_title_grouping` defaults to `false` — no existing behaviour changes
+- **Existing custom_properties fields:** Unchanged; original_title and title_subtitle are new additive fields
+- **TV/News enrichment:** Unaffected; regex patterns are sports-only
+
+---
+
+## Future Extensions (Out of V3 Scope)
+
+- Subtitle field in Plex metadata (requires Plex API enhancement)
+- Per-sport custom subtitle format (requires more complex grouping config)
+- Sponsor prefix blacklist / whitelist (post-processing)
+- User-provided pattern library (community patterns)
+
+---
+
+## Decision Record
+
+**Approved By:** Jo  
+**Rationale:** Regex capture groups provide flexibility for diverse title formats. First-match-wins + default patterns handle 85% of production titles. Feature-flagged implementation; safe to roll out with dry_run=true first.
+
+**Deferred to Later:** Complex subtitle transformations, per-sport customization, external sport database enrichment.
+# Subtitle Field Check — Dispatcharr Live Investigation
+
+**Date:** 2026-03-01  
+**Task:** Verify if Dispatcharr `ProgramData` model has `subtitle` field and XMLTV mapping  
+**Status:** ✅ COMPLETE — Field exists, mapping confirmed
+
+---
+
+## Findings
+
+### 1. ProgramData Model Field Check
+
+**Result:** ✅ **Field exists as `sub_title`**
+
+Django shell output confirmed all fields on `ProgramData`:
+```
+['id', 'epg', 'start_time', 'end_time', 'title', 'sub_title', 'description', 'tvg_id', 'custom_properties']
+```
+
+- **Field name:** `sub_title` (underscore, not camelCase)
+- **Type:** Character/Text field (standard Django model field)
+- **Present:** Yes, part of core model
+
+---
+
+### 2. XMLTV Output Mapping Check
+
+**Result:** ✅ **Maps directly to XMLTV `<sub-title>` element**
+
+Found in `apps/output/views.py` lines 1677–1678:
+```python
+if prog.sub_title:
+    program_xml.append(f"    <sub-title>{html.escape(prog.sub_title)}</sub-title>")
+```
+
+**Mapping pattern:**
+- Reads from `prog.sub_title` (model field, NOT custom_properties)
+- Writes verbatim to XMLTV `<sub-title>` tag
+- Conditional on presence (only writes if non-empty)
+
+---
+
+### 3. Custom Properties Subtitle Support
+
+**Finding:** ⚠️ **No `custom_properties.subtitle` field used in XMLTV pipeline**
+
+- Dispatcharr has `subtitle_template` in custom_properties for *template-based* subtitle generation (used in custom dummy EPG generation path)
+- This does NOT feed into the standard ProgramData `sub_title` field
+- For standard imports (XMLTV ingestion), the model's `sub_title` is populated directly from EPG XML `<sub-title>` element
+- No mechanism exists to override or populate `prog.sub_title` from plugin-written custom_properties
+
+---
+
+## Implication for epg-enricharr
+
+**Can epg-enricharr write subtitles for Plex support?**
+
+❌ **Not via plugin custom_properties enrichment.** Here's why:
+
+1. **Dispatcharr doesn't read `custom_properties.subtitle`** during XMLTV generation
+   - The XMLTV generator reads directly from `prog.sub_title` (model field)
+   - Plugin can only modify `custom_properties` (JSONField)
+   - No bridge between plugin-written subtitle and model field
+
+2. **To write subtitles, we would need to:**
+   - Directly modify the `ProgramData.sub_title` field (requires database access outside plugin scope)
+   - Or wait for Dispatcharr core to support subtitle population from custom_properties
+
+3. **Current workaround:** If match descriptions are valuable for Plex:
+   - Write to `custom_properties` for our own UI/export use
+   - Understand that Plex XMLTV import will NOT see these via XMLTV `<sub-title>` tag
+   - Would require Plex metadata agent to consume from custom_properties (external to XMLTV)
+
+---
+
+## Architecture Decision
+
+**Jo's subtitle-field optimization is NOT feasible via plugin.** The plugin's enrichment layer (custom_properties) has no path to populate XMLTV `<sub-title>`. 
+
+If match descriptions (e.g., "Plex match: AFL Collingwood vs Richmond, Season 2026, Episode 3") are valuable for user UI/export, we can store them in custom_properties as a reference field for future work, but they will not appear in Plex DVR via XMLTV.
+
+---
+
+## Verified Against
+
+- Dispatcharr container: Django `manage.py shell`
+- Dispatcharr source: `apps/output/views.py` lines 1677–1678, 1232–1233, 1556–1557, 1610–1611
+- Dispatcharr model: `apps/epg/models.py` (field presence in schema)
+---

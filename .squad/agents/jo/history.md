@@ -213,3 +213,39 @@
 **Fallback if rejected:** Option C (onscreen_episode metadata) + Option B (Dispatcharr feature request for `show_title` override).
 
 **Decision artifact:** `.squad/decisions/inbox/jo-v3-sports-grouping-arch.md`
+
+### Session 11: V3 Sports Title Grouping — Regex Pattern Spec (2026-03-01)
+
+**Context:** Dennis made a directive decision: use **regex patterns (not simple delimiter)** for sports title grouping. Each pattern can have two capture groups: group 1 = sport name, group 2 (optional) = match description. Patterns tried in order; first match wins. Example: `^(AFL).*:\s*(.+)$` matches "AFL : AFL : Brisbane vs Sydney" → title="AFL", subtitle="Brisbane vs Sydney".
+
+**Key Design Decisions:**
+
+1. **Pattern list, not simple delimiter:** Replaces `sports_title_delimiter` with `sports_title_patterns` (type: list of strings). Comma-separated in plugin.json text field.
+
+2. **Capture groups:** Group 1 (required) = sport/title, Group 2 (optional) = description/subtitle. If only group 1 matches, subtitle is None. If no pattern matches, full title used as-is.
+
+3. **Three default patterns handle production cases:**
+   - Simple colon: `^([A-Za-z\s-]+)\s*:\s*(.+)$` for "AFL : Fremantle v Adelaide"
+   - Double colon (backreference): `^([A-Za-z\s\-]+)\s*:\s*\1\s*:\s*(.+)$` for "AFL : AFL : Brisbane vs Sydney"
+   - Sponsor prefix: `^[A-Za-z\s\-]+\s*:\s*([A-Za-z\s\-]+)\s*:\s*(.+)$` for "Isuzu UTE A-League : Central Coast v Perth"
+
+4. **Edge case handling:**
+   - No match: return (None, None) → title unchanged (passthrough)
+   - Group 2 missing: return (sport_name, None) → title updated, no subtitle
+   - Empty group: treat as no match, try next pattern
+   - Invalid regex: log warning at load time, skip pattern
+
+5. **New plugin.json fields:**
+   - `enable_sports_title_grouping` (boolean, default: false)
+   - `sports_title_patterns` (text with comma-separated regex, default: three patterns above)
+
+6. **Python implementation:**
+   - New method `_extract_sports_title_and_subtitle(title)` iterates patterns with `re.match()`, returns (sport_name, subtitle) tuple
+   - Integration into `enrich_programme()`: calls extraction method, updates `changes['_title']` (for model field), stores original title and subtitle in custom_properties
+   - Pattern parsing in `__init__()` with invalid regex guard (warn + skip)
+
+7. **Integration strategy:** Uses existing `_` prefix convention for model-level fields. `_title` routed to `programme.title` in `_enrich_all_programmes()`, custom_properties keys stored as-is.
+
+**Pattern confirmed:** Regex with capture groups scales well. First-match-wins prevents over-matching. Feature flag allows safe rollout (start with dry_run=true).
+
+**Decision artifact:** `.squad/decisions/inbox/jo-v3-sports-grouping-regex-update.md`
