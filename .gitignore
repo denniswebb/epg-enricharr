@@ -54,6 +54,11 @@ build/
 .cache/
 *.log
 
+# Squad artifacts (archived to ~/scratch/epg-enricharr-squad)
+.squad/
+.squad-templates/
+.copilot/
+
 # Dolt database files (added by bd init)
 .dolt/
 *.db

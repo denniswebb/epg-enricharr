@@ -1,3 +1,31 @@
+## Project Overview
+
+**EPG-Enricharr** is a Dispatcharr plugin (Python 3.8+, Django ORM) that enriches IPTV EPG data for Plex DVR recognition.
+
+**Current Version:** 3.0.0 (V1 TV + V2 Sports/News + V3 Title Grouping)
+
+### Key Files
+- `plugin.py` — Main plugin implementation (all enrichment logic)
+- `plugin.json` — Plugin manifest, settings definitions, version
+- `tests/test_enrichment.py` — Test suite (85 passing, 11 skipped integration stubs)
+- `docs/KNOWLEDGE-TRANSFER.md` — Comprehensive architecture & design decisions
+
+### Architecture
+- **V1 TV enrichment:** Regex parsing of episode strings (S2E36 → season/episode integers)
+- **V2 Sports/News enrichment:** Format string tokens ({YYYY}, {MM}, {DD}, etc.) for date-based episodes
+- **V3 Sports title grouping:** Regex capture groups split titles for Plex series grouping
+- **Content classification:** Pattern-based routing (movie → sports → news → tv)
+- **Feature flags:** Each feature has independent enable/disable toggle
+
+### Coding Conventions
+- Leading `_` prefix in changes dict signals model field mutation (e.g., `_title` → `prog.title`)
+- Late imports for Django models (inside methods, not module level) — enables testing without Django
+- Pattern compilation at `__init__` time, not runtime
+- `categories` (plural) not `category` — matches Dispatcharr API
+- Bulk updates with `batch_size=1000` and `select_related('epg')`
+
+---
+
 Use 'bd' for task tracking
 
 <!-- BEGIN BEADS INTEGRATION -->

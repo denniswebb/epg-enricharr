@@ -60,7 +60,7 @@ source venv/bin/activate
 mise run test-zip
 ```
 
-Creates `epg-enricharr-1.0.0.zip` with:
+Creates `epg-enricharr-3.0.0.zip` with:
 - `plugin.json` — Plugin metadata
 - `plugin.py` — Plugin code
 - `tests/` — Test suite

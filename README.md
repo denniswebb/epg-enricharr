@@ -1,20 +1,22 @@
 # EPG Enricharr
 
-**EPG Enricharr** is a Dispatcharr plugin that enriches electronic program guide (EPG) data to improve how Plex DVR recognizes and organizes TV shows. It parses episode information from your IPTV EPG and stores season/episode numbers in Dispatcharr's database, enabling Plex to correctly identify series and episodes in your recordings.
+**EPG Enricharr** is a Dispatcharr plugin that enriches electronic program guide (EPG) data to improve how Plex DVR recognizes and organizes TV shows, sports, and news programmes. It parses episode information, generates season/episode metadata from date/time tokens, and groups sports titles for proper Plex series organization.
+
+**Current Version:** 3.0.0
 
 ## The Problem
 
 **Plex DVR doesn't recognize TV shows from IPTV EPGs** because:
 - IPTV EPG data lacks XML TV episode number tags (`<episode-num system="xmltv_ns">`)
 - Without these tags, Plex marks **everything as "New"** instead of recognizing series/episodes
+- Sports broadcasts have descriptive titles ("AFL : Fremantle v Adelaide") that prevent Plex from grouping matches under a single series
 - This causes duplicate recordings and prevents proper show tracking
-- You end up with broken episode metadata in your library
 
 **EPG Enricharr solves this** by:
-1. Reading onscreen episode strings from your IPTV EPG (e.g., "S2E36")
-2. Parsing season and episode numbers
-3. Storing them in Dispatcharr's custom properties database
-4. Allowing Dispatcharr's XMLTV generator to output proper episode-num tags
+1. **V1 — TV Enrichment:** Parsing onscreen episode strings (e.g., "S2E36") into season/episode numbers
+2. **V2 — Sports & News Enrichment:** Generating season/episode from date/time tokens using configurable format strings
+3. **V3 — Sports Title Grouping:** Splitting sports titles with regex patterns so Plex groups all matches under one series
+4. Storing enriched metadata in Dispatcharr's database for XMLTV output
 5. Enabling Plex DVR to recognize shows and episodes correctly
 
 ## How It Works
@@ -22,32 +24,53 @@
 ### Architecture
 
 ```
-IPTV EPG (onscreen_episode: "S2E36")
+IPTV EPG (programme data)
        ↓
-   EPG Enricharr (plugin.enrich_programme)
+   Content Classification (movie / sports / news / tv)
        ↓
-Dispatcharr Database (custom_properties: {season: 2, episode: 36})
+   EPG Enricharr (enrich_programme)
+       ├── TV path: parse "S2E36" → season=2, episode=36
+       ├── Sports path: generate from format string → S2026E03151930
+       ├── News path: generate from format string → S2026E0315
+       ├── Movie path: skip (no enrichment)
+       └── Sports title grouping: "AFL : Fremantle v Adelaide" → title="AFL"
+       ↓
+Dispatcharr Database (custom_properties: {season, episode, original_title, ...})
        ↓
 XMLTV Generator (reads custom_properties)
        ↓
-XMLTV Output (<episode-num system="xmltv_ns">1 1 1</episode-num>)
-       ↓
-Plex DVR (recognizes as Season 2, Episode 36)
+Plex DVR (recognizes series, seasons, episodes)
 ```
 
-**What the plugin does:**
-- **Listens** to `epg_refresh` events after EPG import
-- **Parses** episode strings like "S2E36" or "2x36" into season/episode integers
-- **Stores** these values in `ProgramData.custom_properties`
-- **Preserves** the original onscreen_episode for reference
-- **Marks** programmes as previously-shown (prevents false "New" labels)
-- **Updates** the database via bulk operation (efficient and transactional)
+## Features
 
-**What it does NOT do:**
-- Modify your EPG source data
-- Change how Plex records files
-- Manage metadata agents or scanning
-- Require any configuration in Plex itself
+### V1: TV Show Enrichment
+- Parses episode strings like `S2E36`, `S01E05`, `2x36` into season/episode integers
+- Stores values in `ProgramData.custom_properties`
+- Marks programmes as `previously_shown` (prevents false "New" labels in Plex)
+- Supports embedded strings ("Title - S2E36 - Description")
+
+### V2: Sports & News Enrichment
+- **Format string system** with 7 tokens: `{YYYY}`, `{YY}`, `{MM}`, `{DD}`, `{hh}`, `{mm}`, `{channel}`
+- **Content classification** routes programmes to the correct enrichment strategy
+- **Pattern-based detection** using configurable regex for movies, sports, and news
+- **Precedence order:** Movie (skip) → Sports → News → TV
+- **Fallback chain:** Use existing EPG season/episode if present, generate from format string if missing
+
+### V3: Sports Title Grouping
+- **Regex-based title extraction** with configurable capture groups
+- Group 1 = series name (e.g., "AFL"), Group 2 = match description (optional)
+- Original title preserved in `custom_properties.original_title` for recovery
+- First-match-wins pattern evaluation (ordered list, stops at first success)
+- Independent feature flag — works with or without sports enrichment
+
+**Example:**
+```
+Input title:  "AFL : Fremantle v Adelaide"
+Output title: "AFL"                          (used by Plex for grouping)
+Preserved:    original_title = "AFL : Fremantle v Adelaide"
+              title_subtitle = "Fremantle v Adelaide"
+```
 
 ## Installation
 
@@ -73,10 +96,10 @@ services:
 Then extract the plugin zip into your local `./plugins` directory.
 
 #### Native/Manual Installation
-1. **Download** the latest `epg-enricharr-1.0.0.zip` from [GitHub Releases](https://github.com/denniswebb/epg-enricharr/releases)
+1. **Download** the latest `epg-enricharr-3.0.0.zip` from [GitHub Releases](https://github.com/denniswebb/epg-enricharr/releases)
 2. **Extract** to your Dispatcharr plugins directory:
    ```bash
-   unzip epg-enricharr-1.0.0.zip -d /path/to/dispatcharr/plugins/
+   unzip epg-enricharr-3.0.0.zip -d /path/to/dispatcharr/plugins/
    ```
    (Typically: `/app/data/plugins/` in Docker, or wherever you installed Dispatcharr locally)
 3. **Restart** Dispatcharr:
@@ -103,37 +126,75 @@ All settings are optional. Defaults are production-ready for most users.
 |---------|------|---------|-------------|
 | **Enable plugin** | Boolean | `true` | Master switch to enable/disable the entire plugin |
 | **Enable TV enrichment** | Boolean | `true` | Parse episode strings (S2E36) and add season/episode metadata |
-| **Enable sports enrichment** | Boolean | `false` | ⏳ Coming in V2: Year-based season numbering for sports |
-| **TV categories** | Text (comma-separated) | `Movies,Series,Sports` | Programme categories to enrich (case-insensitive partial match) |
-| **Sports categories** | Text (comma-separated) | *(empty)* | ⏳ V2 feature: Categories for sports enrichment |
-| **Auto-mark previously shown** | Boolean | `true` | Mark non-new programmes as `previously_shown` (prevents false "New" labels) |
-| **Dry run mode** | Boolean | `false` | Log changes without writing to database (useful for testing) |
+| **Enable sports enrichment** | Boolean | `false` | Year-based season numbering and date-based episodes for sports |
+| **Enable news enrichment** | Boolean | `false` | Year-based season and date-based episode numbering for news |
+| **Enable sports title grouping** | Boolean | `false` | Split sports titles using regex patterns for Plex grouping (V3) |
+| **TV categories** | Text | `Movies,Series,Sports` | Categories to apply TV enrichment (comma-separated) |
+| **Sports categories** | Text | *(empty)* | Categories for sports enrichment (comma-separated) |
+| **Auto-mark previously shown** | Boolean | `true` | Mark non-new programmes as `previously_shown` |
+| **Dry run mode** | Boolean | `false` | Log changes without writing to database |
+| **Sports season format** | Text | `{YYYY}` | Format string for sports season number |
+| **Sports episode format** | Text | `{MM}{DD}{hh}{mm}{channel}` | Format string for sports episode number |
+| **News season format** | Text | `{YYYY}` | Format string for news season number |
+| **News episode format** | Text | `{MM}{DD}` | Format string for news episode number |
+| **Movie detection patterns** | Text | `(?i)movie,(?i)film,...` | Regex patterns to identify movies (comma-separated) |
+| **Sports detection patterns** | Text | `(?i)sport,(?i)football,...` | Regex patterns to identify sports (comma-separated) |
+| **News detection patterns** | Text | `(?i)news,(?i)weather,...` | Regex patterns to identify news (comma-separated) |
+| **Sports title patterns** | List | `[]` | Ordered regex patterns for title grouping (V3) |
 
 ### Configuration Examples
 
-#### Example 1: Strict Category Matching
+#### Example 1: Enable Sports Enrichment (V2)
+Generate season/episode for sports based on air date and time:
+
+```
+Enable sports enrichment: true
+Sports season format: {YYYY}
+Sports episode format: {MM}{DD}{hh}{mm}
+```
+
+Result: A match airing 2026-03-15 at 19:30 → `S2026E03151930`
+
+#### Example 2: Sports Title Grouping (V3)
+Group all AFL and NRL matches under their sport name:
+
+```
+Enable sports title grouping: true
+Sports title patterns:
+  - "^(AFL).*:\\s*(.+)$"
+  - "^(NRL).*:\\s*(.+)$"
+  - "^(A-League).*:\\s*(.+)$"
+```
+
+Results:
+- "AFL : Fremantle v Adelaide" → title="AFL", subtitle="Fremantle v Adelaide"
+- "NRL Premiership : Broncos v Storm" → title="NRL", subtitle="Broncos v Storm"
+
+#### Example 3: News Enrichment
+Simple date-based episodes for news programmes:
+
+```
+Enable news enrichment: true
+News season format: {YYYY}
+News episode format: {MM}{DD}
+```
+
+Result: News airing 2026-03-15 → `S2026E0315`
+
+#### Example 4: Strict Category Matching
 If you only want to enrich "Series" (not "Movies" or "Sports"):
 
 ```
 TV categories: Series
 ```
 
-#### Example 2: Testing Changes (Dry Run)
+#### Example 5: Testing Changes (Dry Run)
 Before applying enrichment to your database:
 
 1. Enable **Dry run mode** → `true`
 2. Trigger enrichment (see below)
 3. Check logs for what *would* change
 4. Disable **Dry run mode** and re-run when ready
-
-#### Example 3: Custom Category List
-If your IPTV EPG uses non-standard categories like "TVShows" or "Drama":
-
-```
-TV categories: TVShows,Drama,Series,Episode
-```
-
-The plugin does **partial, case-insensitive matching**, so "Drama Series" will match "Drama" in this list.
 
 ## Usage
 
@@ -152,63 +213,83 @@ To manually trigger enrichment on all existing programmes:
 
 ## Example: Before and After
 
-### Input: IPTV EPG Programme
+### V1: TV Show Enrichment
 
-```xml
-<programme start="202602280900" stop="202602281000" channel="bbc1.uk">
-  <title>Coronation Street</title>
-  <desc>British soap opera</desc>
-  <category>Series</category>
-  <onscreen_episode>S45E12345</onscreen_episode>
-</programme>
-```
+**Input:** Programme with `onscreen_episode: "S45E12345"`
 
-### Dispatcharr Custom Properties (Before Enrichment)
+**After enrichment:**
 ```json
 {
-  "title": "Coronation Street",
-  "category": ["Series"],
-  "onscreen_episode": "S45E12345"
-}
-```
-
-### Dispatcharr Custom Properties (After Enrichment)
-```json
-{
-  "title": "Coronation Street",
-  "category": ["Series"],
-  "onscreen_episode": "S45E12345",
   "season": 45,
   "episode": 12345,
+  "onscreen_episode": "S45E12345",
   "previously_shown": true
 }
 ```
 
-### XMLTV Output (Generated by Dispatcharr)
-```xml
-<programme start="202602280900" stop="202602281000" channel="bbc1.uk">
-  <title>Coronation Street</title>
-  <desc>British soap opera</desc>
-  <category>Series</category>
-  <episode-num system="xmltv_ns">44 12344 .</episode-num>
-  <previously-shown />
-</programme>
+### V2: Sports Enrichment
+
+**Input:** Sports programme airing 2026-03-15 at 19:30
+
+**After enrichment (with default format strings):**
+```json
+{
+  "season": 2026,
+  "episode": "03151930",
+  "onscreen_episode": "S2026E03151930",
+  "previously_shown": true
+}
 ```
 
-### Plex DVR Result
-✅ **Recognizes as:**
-- Series: Coronation Street
-- Season: 45
-- Episode: 12345
-- Status: Previously Shown (no duplicate recording)
+### V3: Sports Title Grouping
+
+**Input:** `title = "AFL : Fremantle v Adelaide"`
+
+**After enrichment (with pattern `^(AFL).*:\s*(.+)$`):**
+```json
+{
+  "title": "AFL",
+  "original_title": "AFL : Fremantle v Adelaide",
+  "title_subtitle": "Fremantle v Adelaide",
+  "season": 2026,
+  "episode": "03151930"
+}
+```
+
+Plex now groups all AFL matches under the "AFL" series.
 
 ## Supported Formats
 
-The plugin recognizes these onscreen episode formats:
+### TV Episode Parsing (V1)
 
 - **Standard:** `S2E36`, `S01E05`, `s02e05` (case-insensitive)
 - **Numeric:** `2x36`, `02x05`, `2X36` (case-insensitive)
 - **Embedded:** `Title - S2E36 - Description` (parsed from longer text)
+
+### Format String Tokens (V2)
+
+| Token | Description | Example |
+|-------|-------------|---------|
+| `{YYYY}` | 4-digit year | 2026 |
+| `{YY}` | 2-digit year | 26 |
+| `{MM}` | Month (01-12) | 03 |
+| `{DD}` | Day (01-31) | 15 |
+| `{hh}` | Hour (00-23) | 19 |
+| `{mm}` | Minute (00-59) | 30 |
+| `{channel}` | Channel ID (numeric only) | 42 |
+
+### Title Grouping Patterns (V3)
+
+Patterns use Python regex with capture groups:
+- **Group 1** (required): Series name for Plex grouping
+- **Group 2** (optional): Match description / subtitle
+
+Example patterns:
+```
+^(AFL).*:\s*(.+)$          — "AFL : Fremantle v Adelaide"
+^(NRL).*:\s*(.+)$          — "NRL Premiership : Broncos v Storm"
+^(A-League)\s*:\s*(.+)$    — "A-League : Sydney FC v Melbourne"
+```
 
 ### Not Supported (Logged as Skipped)
 
@@ -264,10 +345,6 @@ When parsing fails, the programme is logged and skipped—no errors occur.
    - Toggle the EPG source off and on to force re-import
    - This reloads the XMLTV metadata
 
-5. **Check for duplicate recordings:**
-   - If Plex still records the same episode twice, first enrich, then clear Plex's EPG cache
-   - Set a future recording to test
-
 ### Database Rollback (Undo Enrichment)
 
 If enrichment caused issues, you can:
@@ -315,6 +392,8 @@ mise run install-plugin # Install to local Dispatcharr
 pytest tests/test_enrichment.py -v
 ```
 
+Test suite: 85 passing, 11 skipped (V2 integration stubs).
+
 ### Viewing Test Output
 ```bash
 mise run check-output   # Print XMLTV output from test data
@@ -322,19 +401,25 @@ mise run check-output   # Print XMLTV output from test data
 
 See [docs/SETUP.md](docs/SETUP.md) for detailed local development instructions.
 
-## Roadmap (V2 and Beyond)
+## Roadmap
 
-**Planned Features:**
-- 🎬 Sports enrichment: Year-based seasons + sequential episode numbering
-- 🌍 Multi-language support (episode string parsing)
-- ⚙️ Admin UI for category mapping
-- 📊 Enrichment statistics dashboard
+### Completed
+- V1: TV show enrichment (parsing, previously-shown)
+- V2: Sports & news enrichment (format strings, content classification)
+- V3: Sports title grouping (regex patterns, original title preservation)
 
-**Out of Scope (By Design):**
+### Planned (V4+)
+- External API enrichment (TheSportsDB, TVDB) for richer metadata
+- Sequential episode numbering for sports (track game order within season)
+- Multi-language episode string parsing
+- Admin UI for pattern management (visual regex builder)
+- Community pattern packs (shared rule repository)
+- CI/CD pipeline (GitHub Actions for test/release automation)
+
+### Out of Scope (By Design)
 - DVR recording filenames (Plex manages this)
 - Plex metadata agents (plugin only enriches XMLTV)
 - Retroactive enrichment of old ProgramData
-- Multi-language support in V1
 
 ## License
 
@@ -348,6 +433,5 @@ MIT License — see [LICENSE](LICENSE) file.
 
 ---
 
-**Made by** [Dennis Webb](https://github.com/denniswebb) and contributors.  
-**Inspired by** the Dispatcharr community's need for better Plex DVR recognition.  
-**Maintained with ❤️** for cord-cutters everywhere.
+**Made by** [Dennis Webb](https://github.com/denniswebb) and contributors.
+**Inspired by** the Dispatcharr community's need for better Plex DVR recognition.
