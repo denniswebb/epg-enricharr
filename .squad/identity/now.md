@@ -1,40 +1,50 @@
 ---
-updated_at: 2026-02-28T22:16:56Z
-focus_area: V3 sports title grouping architecture — pending Dennis approval
+updated_at: 2026-03-02T02:32:27Z
+focus_area: V3 sports title grouping — IMPLEMENTED and tested
 active_issues: []
 ---
 
 # What We're Focused On
 
 ## Active Focus
-**V3 sports title grouping — Jo's architecture decision pending user approval**
+**V3 sports title grouping — IMPLEMENTED ✅ Ready for local testing with Dennis's real EPG data**
 
-## Critical Decisions Waiting
+## Completed in This Session
 
-**Dennis must approve:** Modify `programme.title` directly in plugin (scope expansion: enrichment → transformation). Jo's decision document includes 3-phase implementation spec and fallback options if rejected.
+✅ **Blair (Backend Dev):** V3 sports title grouping fully implemented
+  - Pattern compilation in `__init__()` with graceful invalid regex handling
+  - `_extract_sports_title_and_subtitle()` method with first-match-wins algorithm
+  - Title grouping logic in `enrich_programme()` (independent of sports enrichment)
+  - Bulk update with conditional 'title' field list
+  - 2 new settings in plugin.json: `enable_sports_title_grouping`, `sports_title_patterns`
+  - Architecture patterns: `_title` convention for model field mutations, feature independence
 
-## Immediate Next Actions (in order)
+✅ **Tootie (Tester):** 12 comprehensive tests written and passing
+  - Happy path: basic regex, first-match-wins, optional subtitle
+  - Edge cases: no match, disabled feature, empty patterns, invalid regex
+  - Guards: empty capture group rejection, whitespace stripping
+  - Regressions: TV enrichment unaffected
+  - Original title preservation verified
 
-1. **Dennis approval/rejection** — Review Jo's architecture decision (merged into decisions.md, Session 8 entry). Two paths:
-   - **APPROVE:** Blair executes Phase 0–3 (subtitle field check, title splitting, model mutations, settings)
-   - **REJECT:** Blair executes fallback plan (metadata-only enrichment + feature request to Dispatcharr)
+✅ **All 85 tests passing, 11 skipped, zero regressions**
 
-2. **Blair Phase 0 (independent)** — Can proceed regardless of Phase 1–3 approval:
-   - Verify `ProgramData` model has `subtitle` field
-   - Check if Dispatcharr's XMLTV code maps `programme.subtitle` → `<sub-title>`
-   - If both yes: document for future enhancement
+✅ **Scribe:** Orchestration logs written, decision inbox merged, session log created
 
-3. **Session continuation** — Awaiting Dennis to review decision in decisions.md and provide go/no-go before Blair implements Phase 1–3
+## Next Actions (in order)
 
-## Completed in Session 8
+1. **Local Testing (Dennis)** — Deploy to test Dispatcharr, verify Plex grouping behavior with real EPG data
+   - Test pattern matching against actual AFL/NRL titles
+   - Verify original title recovery in custom_properties
+   - Check Plex series grouping works as expected
 
-✅ Blair: XMLTV field mapping research complete — Findings: `sub_title` not mapped, `show_title`/`series_title` don't exist, no custom_properties hook for title override  
-✅ Jo: V3 sports grouping architecture decision finalized — Option A (modify title) with full spec and fallback plan  
-✅ Scribe: Decisions merged, logs written, inbox cleaned, blair history updated  
+2. **Documentation** — Update README and user guide with pattern examples (AFL, NRL, A-League)
+
+3. **Version Bump** — Release as v3.0.0 (semantic versioning for V3 feature)
+
+4. **Production Release** — Deploy to live environment
 
 ## Known V3 Candidates (Future Planning)
 
-- Sports title grouping (core V3 — **IN PROGRESS, pending approval**)
 - Better EPG descriptions for sports (future)
 - Sequential episode numbering for sports (future)
 - Multi-language episode string parsing (future)
@@ -43,8 +53,9 @@ active_issues: []
 ## Current State
 
 - v2.0.2 live, 73 tests passing, live-verified
-- V3 research complete, architecture decision ready for user sign-off
-- Phase 0 ready to start; Phase 1–3 blocked on approval
+- V3 sports title grouping implemented, 12 tests passing
+- Ready for local testing with Dennis's real EPG data
+- Documentation and release pending
 
 ## Process Notes
 

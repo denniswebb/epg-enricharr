@@ -1100,3 +1100,103 @@ If match descriptions (e.g., "Plex match: AFL Collingwood vs Richmond, Season 20
 
 
 
+
+---
+
+## V3 Sports Title Grouping Implementation
+
+**Implemented By:** Blair (Backend Dev)  
+**Date:** 2026-03-02  
+**Status:** ✅ Complete — All tests passing (85/85 + 11 skipped)
+
+V3 sports title grouping is fully implemented with regex pattern matching. Feature allows users to configure regex patterns that extract sport names from EPG titles for Plex grouping. Original titles are preserved in custom_properties for recovery.
+
+**Key Implementation Details:**
+
+1. **Pattern Configuration** — Accepts list or comma-separated string from config. Invalid patterns logged and skipped (no crash). Patterns compiled once at initialization.
+
+2. **Title Extraction** — `_extract_sports_title_and_subtitle()` method implements first-match-wins algorithm. Capture group 1 = sport name (required), group 2 = subtitle (optional). Whitespace stripped. Empty/whitespace-only captures rejected.
+
+3. **Architecture** — Title grouping logic placed OUTSIDE sports enrichment block. Sports title grouping is independent of sports season/episode enrichment. User can enable title grouping WITHOUT enabling sports season/episode numbering.
+
+4. **Model Field Mutation Convention** — Uses `_title` (leading underscore) in changes dict to signal model field mutation (not custom_properties). Distinguishes between model fields (title, subtitle) and custom_properties enrichment.
+
+5. **Bulk Update Optimization** — Tracks if ANY programme needs title field update, then conditionally includes 'title' in `update_fields` list. Maintains bulk update efficiency (1000 batch size).
+
+6. **Settings** — Two new settings in plugin.json:
+   - `enable_sports_title_grouping` (boolean, default false)
+   - `sports_title_patterns` (list, default [])
+
+7. **Original Title Preservation** — Original EPG title stored in `custom_properties.original_title` for recovery if grouping is wrong.
+
+**Configuration Example:**
+```json
+{
+  "enable_sports_title_grouping": true,
+  "sports_title_patterns": [
+    "^(AFL).*:\\s*(.+)$",
+    "^(NRL).*:\\s*(.+)$"
+  ]
+}
+```
+
+**EPG Input:** `"AFL : Fremantle v Adelaide"`  
+**After enrichment:**
+- `programme.title` → `"AFL"`
+- `custom_properties.original_title` → `"AFL : Fremantle v Adelaide"`
+- `custom_properties.title_subtitle` → `"Fremantle v Adelaide"`
+
+**Edge Cases Handled:**
+- No pattern match → Title unchanged
+- Invalid regex in config → Pattern skipped, logged, no crash
+- Empty patterns list → No mutation
+- Empty capture group → Pattern skipped, tries next
+- Whitespace-only capture → Treated as empty
+- Missing capture group 2 → Subtitle not set (optional)
+- Feature disabled → No title grouping
+
+**Migration Path:**
+- Feature is OFF by default — no behavior change on upgrade
+- User must explicitly enable `enable_sports_title_grouping`
+- User must configure `sports_title_patterns` (no default patterns)
+- Original titles preserved in `custom_properties.original_title` for recovery
+- No breaking changes — V1 TV enrichment and V2 sports/news enrichment continue to work
+
+**Known Limitations:**
+- Pattern configuration complexity — Users must understand regex capture groups
+- No subtitle field population — Subtitle stored in custom_properties only
+- No automatic pattern detection — User must manually configure patterns per sport
+- Title mutation is persistent — Once mutated, stays mutated until feature disabled and re-run
+
+---
+
+## V3 Sports Title Grouping Test Strategy
+
+**Decision By:** Tootie (Tester)  
+**Date:** 2026-03-02  
+**Status:** ✅ IMPLEMENTED — All 12 tests pass
+
+Comprehensive test coverage for regex-based title extraction with capture groups. Test strategy prioritizes edge cases (invalid regex, empty patterns, no match) alongside happy path scenarios.
+
+**Test Coverage (12 tests):**
+1. Basic regex matching — `^(AFL).*:\s*(.+)$` pattern tested
+2. First-match-wins (matching first) — Two patterns, first matches
+3. First-match-wins (matching second) — First doesn't match, second does
+4. No match — Title unchanged when no patterns match
+5. Feature disabled — `enable_sports_title_grouping=False` tested
+6. Invalid regex — Bad pattern logged, skipped, no crash
+7. Empty patterns list — Title unchanged when `sports_title_patterns=[]`
+8. Capture group 2 optional — Pattern with only group 1, no subtitle
+9. Capture group 1 empty — Guard rejects empty strings
+10. No regression TV enrichment — TV enrichment unaffected
+11. original_title preserved — Stored in custom_properties
+12. Whitespace stripped — Whitespace stripped from capture groups
+
+**Test Results:** 85 passed, 11 skipped (V2/integration stubs), zero regressions.
+
+**Key Test Patterns:**
+- MockProgramData with datetime fixture (required for sports enrichment path)
+- Changes dict assertion for `_title`, `original_title`, `title_subtitle` keys
+- Invalid regex handling in `__init__()` (compile-time logging)
+- First-match-wins algorithm validation
+

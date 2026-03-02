@@ -343,3 +343,64 @@ Jo's idea to write match descriptions to a subtitle field for Plex support is **
 **Status:** PENDING DENNIS APPROVAL. Phase 0 can proceed independently. Blocks Phase 1–3 implementation.
 
 **Research artifacts merged into decisions.md:** `.squad/decisions/inbox/blair-xmltv-field-research.md`, `.squad/decisions/inbox/jo-v3-sports-grouping-arch.md`
+
+---
+
+### Session 11: V3 Sports Title Grouping Implementation (2026-03-02)
+
+**Implementation Complete:** V3 sports title grouping with regex pattern matching fully implemented and tested.
+
+**Key Implementation Details:**
+
+1. **Pattern Parsing (plugin.py __init__):**
+   - Added `enable_sports_title_grouping` config flag (default: False)
+   - Added `sports_title_patterns` parsing — accepts list or comma-separated string
+   - Invalid regex patterns logged and skipped gracefully (no crash)
+   - Patterns compiled once at initialization for efficiency
+
+2. **Title Extraction Method (`_extract_sports_title_and_subtitle()`):**
+   - Iterates patterns in order — first match wins
+   - Returns (sport_name, subtitle) tuple from capture groups 1 and 2
+   - Guards: rejects empty/whitespace-only capture groups, continues to next pattern
+   - Returns (None, None) if no pattern matches — caller uses original title
+   - Error handling: IndexError and re.error caught, pattern skipped
+
+3. **Title Grouping Logic in `enrich_programme()`:**
+   - **Critical architectural fix:** Title grouping logic placed OUTSIDE sports enrichment block
+   - Runs independently when content_type='sports' + feature enabled + patterns configured
+   - Sports title grouping is its own feature, not dependent on sports season/episode enrichment
+   - Changes dict contains: `_title` (leading underscore = model field), `original_title`, `title_subtitle` (optional)
+
+4. **Bulk Update in `_enrich_all_programmes()`:**
+   - Extract `_title` from changes dict before updating custom_properties
+   - Apply title mutation to `programme.title` if `_title` present
+   - Track `title_changed` flag across all programmes
+   - Conditionally add `'title'` to `update_fields` list in bulk_update() when any title was changed
+   - Maintains efficiency: only adds field when necessary
+
+5. **Settings in plugin.json:**
+   - `enable_sports_title_grouping` (boolean, default: false) — feature flag
+   - `sports_title_patterns` (list, default: []) — user must configure their own patterns
+   - Type is "list" not "text" — Dispatcharr UI will handle list input appropriately
+
+**Architectural Patterns Learned:**
+
+- **`_title` convention:** Leading underscore in changes dict signals model field mutation (not custom_properties)
+- **Scope separation:** Title grouping is independent of season/episode enrichment — different features, different flags
+- **Conditional bulk_update fields:** Track whether ANY programme needs a field update, then conditionally include in update_fields list
+- **First-match-wins pattern:** Iterate compiled regex patterns in order, stop at first successful match
+- **Safe pattern parsing:** Same `_parse_patterns` approach as existing movie/sports/news patterns — skip invalid, log warning
+
+**Testing Results:**
+- All 85 tests pass (12 new V3 sports title grouping tests + 73 existing tests)
+- 11 tests skipped (V2 sports enrichment features, integration tests)
+- Zero regression — existing TV/news/sports enrichment unaffected
+
+**Implementation Artifacts:**
+- plugin.py: 3 sections modified (__init__, enrich_programme, _enrich_all_programmes)
+- plugin.json: 2 new settings added
+- Tests: 12 new tests in TestSportsTitleGrouping (all passing)
+
+**Key Files Modified:**
+- `/Users/dennis/Repositories/github.com/denniswebb/epg-enricharr/plugin.py`
+- `/Users/dennis/Repositories/github.com/denniswebb/epg-enricharr/plugin.json`

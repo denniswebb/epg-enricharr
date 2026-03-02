@@ -324,3 +324,48 @@ This passes whether the key is absent from changes (not overwritten) or explicit
 **Test Suite:** All 17 V2 tests pass. Full suite: 73 passed, 11 skipped, 0 failed. No regressions.
 
 **Key Learning:** Test assertions should reflect the actual contract — if the code ALWAYS sets a field in a branch, the test should unconditionally assert it, not use a permissive guard. This improves confidence in both code and test.
+
+---
+
+## Session 8: V3 Sports Title Grouping Tests (2026-03-01)
+
+**What:** Comprehensive test suite for V3 sports title grouping regex implementation (12 new tests).
+
+**Feature Context:** V3 adds sports title grouping via regex patterns with capture groups:
+- `enable_sports_title_grouping` (boolean, default false)
+- `sports_title_patterns` (comma-separated regex list)
+- Capture group 1 = new title (sport name)
+- Capture group 2 (optional) = subtitle/context
+- Original title stored in `custom_properties['original_title']`
+- `_title` key in changes dict signals `programme.title` mutation
+
+**Tests Added (12 new tests in `TestSportsTitleGrouping`, all passing):**
+
+1. **`test_basic_regex_matching`** — Pattern `^(AFL).*:\s*(.+)$` matches "AFL : Brisbane vs Sydney" → title="AFL", original_title stored, subtitle="Brisbane vs Sydney"
+2. **`test_first_match_wins_with_matching_first_pattern`** — Two patterns, first matches → use first
+3. **`test_first_match_wins_with_second_pattern`** — Two patterns, first doesn't match, second does → use second
+4. **`test_no_match_title_unchanged`** — No pattern matches → title unchanged, no original_title stored
+5. **`test_feature_disabled`** — `enable_sports_title_grouping=False` → title unchanged
+6. **`test_invalid_regex_pattern_graceful_skip`** — Bad pattern logged as warning, skipped, second pattern works (no crash)
+7. **`test_empty_patterns_list`** — Empty `sports_title_patterns` → no title mutation
+8. **`test_capture_group_2_optional`** — Pattern with only group 1 → title mutated, no subtitle
+9. **`test_capture_group_1_empty_no_mutation`** — Empty group 1 → guard rejects, no title mutation
+10. **`test_no_regression_tv_enrichment_still_works`** — TV show enrichment unaffected by sports title feature
+11. **`test_original_title_preserved_in_custom_properties`** — `original_title` in changes dict when title is mutated
+12. **`test_whitespace_stripped_from_captures`** — Leading/trailing whitespace stripped from captured groups
+
+**Coverage Notes:**
+- All 10 requirements from task brief covered
+- Sports title grouping requires `enable_sports_enrichment=True` AND `enable_sports_title_grouping=True` (both features work together)
+- Tests use `MockProgramData` with `start` datetime fixture for sports enrichment path
+- Blair's implementation (plugin.py lines 274-288) already complete and passing all tests
+
+**Final Test Counts:** 85 passed, 11 skipped (up from 73 passed). V3 tests added without breaking any existing tests.
+
+**Test Pattern Used:**
+- Set up plugin config with both `enable_sports_enrichment=True` and `enable_sports_title_grouping=True`
+- Use `datetime(2026, 3, 15, 19, 30)` fixture for reproducible format string testing
+- Test negative cases (no match, disabled feature, empty patterns, invalid regex) alongside positive paths
+- Verify `_title`, `original_title`, and `title_subtitle` keys in changes dict
+
+**Key Implementation Insight:** Sports title grouping is implemented inside the sports enrichment branch (`if content_type == 'sports' and self.enable_sports_enrichment:`), so both feature flags must be enabled. This is intentional design — title grouping is a sports enrichment feature, not standalone.

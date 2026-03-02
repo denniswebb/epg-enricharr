@@ -52,6 +52,7 @@ class Plugin:
         self.sports_episode_format = self.config.get('sports_episode_format', '{MM}{DD}{hh}{mm}{channel}')
         self.news_season_format = self.config.get('news_season_format', '{YYYY}')
         self.news_episode_format = self.config.get('news_episode_format', '{MM}{DD}')
+        self.enable_sports_title_grouping = self.config.get('enable_sports_title_grouping', False)
 
         def _parse_patterns(pattern_str, defaults):
             raw = self.config.get(pattern_str, defaults)
@@ -67,6 +68,19 @@ class Plugin:
         self.movie_patterns = _parse_patterns('movie_patterns', '(?i)movie,(?i)film,(?i)cinema')
         self.sports_patterns = _parse_patterns('sports_patterns', '(?i)sport,(?i)football,(?i)soccer,(?i)basketball,(?i)baseball,(?i)hockey,(?i)tennis,(?i)golf,(?i)racing,(?i)boxing,(?i)wrestling,(?i)mma,(?i)ufc')
         self.news_patterns = _parse_patterns('news_patterns', '(?i)news,(?i)weather,(?i)report')
+        
+        # Parse sports title patterns for V3 title grouping
+        sports_title_raw = self.config.get('sports_title_patterns', [])
+        if isinstance(sports_title_raw, str):
+            sports_title_parts = [p.strip() for p in sports_title_raw.split(',') if p.strip()]
+        else:
+            sports_title_parts = list(sports_title_raw or [])
+        self.sports_title_patterns = []
+        for p in sports_title_parts:
+            try:
+                self.sports_title_patterns.append(re.compile(p))
+            except re.error:
+                logger.warning(f"Invalid sports title regex pattern skipped: {p!r}")
     
     def parse_episode_string(self, episode_str: str) -> Optional[Tuple[int, int]]:
         """
@@ -159,6 +173,41 @@ class Plugin:
                 return 'news'
         return 'tv'
 
+    def _extract_sports_title_and_subtitle(self, title: str) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Extract sport name and match description from title using regex patterns.
+        
+        Args:
+            title: Programme title
+            
+        Returns:
+            Tuple of (sport_name, subtitle) where:
+            - sport_name: Captured group 1 (sport/event name), or None if no match
+            - subtitle: Captured group 2 (description), or None if missing
+            
+            If no pattern matches, returns (None, None) — caller uses full title as-is.
+        """
+        if not title:
+            return None, None
+        
+        # Iterate patterns in order; first match wins
+        for pattern in self.sports_title_patterns:
+            try:
+                match = pattern.search(title)
+                if match:
+                    # Extract group 1 (required) and group 2 (optional)
+                    sport_name = match.group(1) if match.lastindex >= 1 else None
+                    subtitle = match.group(2) if match.lastindex >= 2 else None
+                    
+                    # Guard: reject empty strings
+                    if sport_name and sport_name.strip():
+                        return sport_name.strip(), subtitle.strip() if subtitle else None
+            except (IndexError, re.error):
+                continue
+        
+        # No pattern matched
+        return None, None
+
     def should_enrich_tv(self, programme_data) -> bool:
         """
         Determine if a programme should receive TV enrichment.
@@ -201,6 +250,22 @@ class Plugin:
         # Movies → skip enrichment entirely
         if content_type == 'movie':
             return {}
+
+        # V3: Sports title grouping (applies to sports content, independent of enrichment)
+        if content_type == 'sports' and self.enable_sports_title_grouping and self.sports_title_patterns:
+            original_title = getattr(programme_data, 'title', '') or ''
+            sport_name, subtitle = self._extract_sports_title_and_subtitle(original_title)
+            
+            if sport_name:
+                # Grouping succeeded: update title to sport name
+                changes['_title'] = sport_name
+                
+                # Store original title for reference
+                changes['original_title'] = original_title
+                
+                # If subtitle was extracted, store it in custom property
+                if subtitle:
+                    changes['title_subtitle'] = subtitle
 
         # Sports enrichment
         if content_type == 'sports' and self.enable_sports_enrichment:
@@ -325,6 +390,7 @@ class Plugin:
             }
         
         programmes_to_update = []
+        title_changed = False
         stats = {
             'total': 0,
             'enriched': 0,
@@ -341,9 +407,17 @@ class Plugin:
                 changes = self.enrich_programme(programme)
                 
                 if changes:
+                    # Extract _title before updating custom_properties (if present)
+                    title_change = changes.pop('_title', None)
+                    
                     # Apply changes to custom_properties
                     programme.custom_properties = programme.custom_properties or {}
                     programme.custom_properties.update(changes)
+                    
+                    # Apply title mutation if present
+                    if title_change is not None:
+                        programme.title = title_change
+                        title_changed = True
                     
                     if not self.dry_run_mode:
                         programmes_to_update.append(programme)
@@ -360,9 +434,14 @@ class Plugin:
         # Bulk update in database
         if not self.dry_run_mode and programmes_to_update:
             try:
+                # Build update_fields list dynamically
+                update_fields = ['custom_properties']
+                if title_changed:
+                    update_fields.append('title')
+                
                 ProgramData.objects.bulk_update(
                     programmes_to_update,
-                    ['custom_properties'],
+                    update_fields,
                     batch_size=1000
                 )
                 log.info(f"Bulk updated {len(programmes_to_update)} programmes")

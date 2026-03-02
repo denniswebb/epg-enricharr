@@ -125,6 +125,20 @@
       "label": "News detection patterns (comma-separated regex)",
       "description": "Regex patterns to identify news programmes. Matched against categories and title.",
       "default": "(?i)news,(?i)weather,(?i)report"
+    },
+    {
+      "id": "enable_sports_title_grouping",
+      "type": "boolean",
+      "label": "Enable sports title grouping (V3)",
+      "description": "Split sports titles using regex patterns for Plex grouping. Sets title to capture group 1; preserves original in custom_properties.original_title.",
+      "default": false
+    },
+    {
+      "id": "sports_title_patterns",
+      "type": "list",
+      "label": "Sports title grouping patterns (list of regex)",
+      "description": "Ordered list of regex patterns for sports title matching. First match wins. Group 1 = new title, group 2 (optional) = subtitle. Example: [\"^(AFL).*:\\\\s*(.+)$\", \"^(NRL).*:\\\\s*(.+)$\"]",
+      "default": []
     }
   ],
   "actions": [

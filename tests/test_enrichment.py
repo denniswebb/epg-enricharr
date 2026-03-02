@@ -914,3 +914,229 @@ class TestEnrichProgrammeV2:
         assert changes['episode'] == '03011800'
         # onscreen_episode must not appear in changes (already set, no overwrite needed)
         assert changes.get('onscreen_episode', existing_onscreen) == existing_onscreen
+
+
+class TestSportsTitleGrouping:
+    """V3 Sports Title Grouping: Tests for regex-based title extraction."""
+    
+    def setup_method(self):
+        """Set up test fixtures with sports title grouping enabled."""
+        from datetime import datetime
+        # Default pattern: simple colon format
+        # Sports title grouping requires sports enrichment to be enabled
+        self.plugin = EnrichmentPlugin({
+            'enable_sports_enrichment': True,
+            'enable_sports_title_grouping': True,
+            'sports_title_patterns': '^(AFL).*:\\s*(.+)$'
+        })
+        self.dt = datetime(2026, 3, 15, 19, 30)
+    
+    def test_basic_regex_matching(self):
+        """Basic regex: 'AFL : Brisbane vs Sydney' with pattern '^(AFL).*:\\s*(.+)$' 
+        → title='AFL', original_title stored."""
+        programme = MockProgramData(
+            title="AFL : Brisbane vs Sydney",
+            custom_properties={'categories': ['Sports']},
+            start=self.dt
+        )
+        changes = self.plugin.enrich_programme(programme)
+        
+        # Title should be mutated to sport name (group 1)
+        assert changes.get('_title') == 'AFL'
+        # Original title should be preserved
+        assert changes.get('original_title') == 'AFL : Brisbane vs Sydney'
+        # Subtitle (group 2) should be captured
+        assert changes.get('title_subtitle') == 'Brisbane vs Sydney'
+    
+    def test_first_match_wins_with_matching_first_pattern(self):
+        """Two patterns: first matches → use first pattern's capture groups."""
+        plugin = EnrichmentPlugin({
+            'enable_sports_enrichment': True,
+            'enable_sports_title_grouping': True,
+            'sports_title_patterns': '^(AFL).*:\\s*(.+)$,^(NRL).*:\\s*(.+)$'
+        })
+        programme = MockProgramData(
+            title="AFL : Fremantle v Adelaide",
+            custom_properties={'categories': ['Sports']},
+            start=self.dt
+        )
+        changes = plugin.enrich_programme(programme)
+        
+        assert changes.get('_title') == 'AFL'
+        assert changes.get('original_title') == 'AFL : Fremantle v Adelaide'
+        assert changes.get('title_subtitle') == 'Fremantle v Adelaide'
+    
+    def test_first_match_wins_with_second_pattern(self):
+        """Two patterns: first doesn't match, second does → use second pattern."""
+        plugin = EnrichmentPlugin({
+            'enable_sports_enrichment': True,
+            'enable_sports_title_grouping': True,
+            'sports_title_patterns': '^(AFL).*:\\s*(.+)$,^(NRL).*:\\s*(.+)$'
+        })
+        programme = MockProgramData(
+            title="NRL : Melbourne Storm v Brisbane Broncos",
+            custom_properties={'categories': ['Sports']},
+            start=self.dt
+        )
+        changes = plugin.enrich_programme(programme)
+        
+        assert changes.get('_title') == 'NRL'
+        assert changes.get('original_title') == 'NRL : Melbourne Storm v Brisbane Broncos'
+        assert changes.get('title_subtitle') == 'Melbourne Storm v Brisbane Broncos'
+    
+    def test_no_match_title_unchanged(self):
+        """No pattern matches → title unchanged, no original_title stored."""
+        programme = MockProgramData(
+            title="Live Broadcast",
+            custom_properties={'categories': ['Sports']},
+            start=self.dt
+        )
+        changes = self.plugin.enrich_programme(programme)
+        
+        # Title not mutated when no pattern matches
+        assert '_title' not in changes
+        assert 'original_title' not in changes
+        assert 'title_subtitle' not in changes
+    
+    def test_feature_disabled(self):
+        """enable_sports_title_grouping=False → title unchanged."""
+        plugin = EnrichmentPlugin({
+            'enable_sports_enrichment': True,
+            'enable_sports_title_grouping': False,
+            'sports_title_patterns': '^(AFL).*:\\s*(.+)$'
+        })
+        programme = MockProgramData(
+            title="AFL : Brisbane vs Sydney",
+            custom_properties={'categories': ['Sports']},
+            start=self.dt
+        )
+        changes = plugin.enrich_programme(programme)
+        
+        # Feature disabled → no title mutation
+        assert '_title' not in changes
+        assert 'original_title' not in changes
+    
+    def test_invalid_regex_pattern_graceful_skip(self):
+        """Invalid regex pattern → logged warning, skip pattern, no crash."""
+        plugin = EnrichmentPlugin({
+            'enable_sports_enrichment': True,
+            'enable_sports_title_grouping': True,
+            'sports_title_patterns': '[invalid(,^(NRL).*:\\s*(.+)$'
+        })
+        programme = MockProgramData(
+            title="NRL : Storm v Broncos",
+            custom_properties={'categories': ['Sports']},
+            start=self.dt
+        )
+        
+        # First pattern is invalid, second pattern should match
+        changes = plugin.enrich_programme(programme)
+        assert changes.get('_title') == 'NRL'
+        assert changes.get('original_title') == 'NRL : Storm v Broncos'
+    
+    def test_empty_patterns_list(self):
+        """Empty sports_title_patterns → no title mutation."""
+        plugin = EnrichmentPlugin({
+            'enable_sports_enrichment': True,
+            'enable_sports_title_grouping': True,
+            'sports_title_patterns': ''
+        })
+        programme = MockProgramData(
+            title="AFL : Brisbane vs Sydney",
+            custom_properties={'categories': ['Sports']},
+            start=self.dt
+        )
+        changes = plugin.enrich_programme(programme)
+        
+        # No patterns → no title mutation
+        assert '_title' not in changes
+        assert 'original_title' not in changes
+    
+    def test_capture_group_2_optional(self):
+        """Pattern with only group 1 (no group 2) → title mutated, no subtitle."""
+        plugin = EnrichmentPlugin({
+            'enable_sports_enrichment': True,
+            'enable_sports_title_grouping': True,
+            'sports_title_patterns': '^(AFL)$'  # Only capture group 1, no group 2
+        })
+        programme = MockProgramData(
+            title="AFL",
+            custom_properties={'categories': ['Sports']},
+            start=self.dt
+        )
+        changes = plugin.enrich_programme(programme)
+        
+        assert changes.get('_title') == 'AFL'
+        assert changes.get('original_title') == 'AFL'
+        # No group 2 → no subtitle stored
+        assert 'title_subtitle' not in changes
+    
+    def test_capture_group_1_empty_no_mutation(self):
+        """Capture group 1 is empty string → skip pattern, don't mutate title."""
+        plugin = EnrichmentPlugin({
+            'enable_sports_enrichment': True,
+            'enable_sports_title_grouping': True,
+            'sports_title_patterns': '^().*:\\s*(.+)$'  # Group 1 captures nothing
+        })
+        programme = MockProgramData(
+            title=" : Brisbane vs Sydney",
+            custom_properties={'categories': ['Sports']},
+            start=self.dt
+        )
+        changes = plugin.enrich_programme(programme)
+        
+        # Empty group 1 → guard rejects, no title mutation
+        assert '_title' not in changes
+        assert 'original_title' not in changes
+    
+    def test_no_regression_tv_enrichment_still_works(self):
+        """TV show enrichment with feature enabled → onscreen_episode parsing unaffected."""
+        plugin = EnrichmentPlugin({
+            'enable_sports_enrichment': True,
+            'enable_sports_title_grouping': True,
+            'enable_tv_enrichment': True,
+            'sports_title_patterns': '^(AFL).*:\\s*(.+)$'
+        })
+        programme = MockProgramData(
+            title="My TV Show",
+            custom_properties={'categories': ['Series'], 'onscreen_episode': 'S2E36'}
+        )
+        changes = plugin.enrich_programme(programme)
+        
+        # TV enrichment should work normally
+        assert changes.get('season') == 2
+        assert changes.get('episode') == 36
+        # Title not mutated (not a sports programme)
+        assert '_title' not in changes
+    
+    def test_original_title_preserved_in_custom_properties(self):
+        """When title is modified, original_title must be stored in changes dict."""
+        programme = MockProgramData(
+            title="AFL : AFL : Double Title",
+            custom_properties={'categories': ['Sports']},
+            start=self.dt
+        )
+        changes = self.plugin.enrich_programme(programme)
+        
+        # Original title must be preserved when title is mutated
+        assert changes.get('_title') == 'AFL'
+        assert changes.get('original_title') == 'AFL : AFL : Double Title'
+        # This will be written to custom_properties by _enrich_all_programmes
+    
+    def test_whitespace_stripped_from_captures(self):
+        """Captured groups should be stripped of leading/trailing whitespace."""
+        plugin = EnrichmentPlugin({
+            'enable_sports_enrichment': True,
+            'enable_sports_title_grouping': True,
+            'sports_title_patterns': '^([A-Za-z\\s]+)\\s*:\\s*(.+)$'
+        })
+        programme = MockProgramData(
+            title="  AFL  :   Brisbane vs Sydney  ",
+            custom_properties={'categories': ['Sports']},
+            start=self.dt
+        )
+        changes = plugin.enrich_programme(programme)
+        
+        # Whitespace should be stripped from captures
+        assert changes.get('_title') == 'AFL'
+        assert changes.get('title_subtitle') == 'Brisbane vs Sydney'
