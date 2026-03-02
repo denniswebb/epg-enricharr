@@ -1,19 +1,15 @@
 """
 Test suite for epg-enricharr plugin.
 
-NOTES:
-- Some tests reference methods not yet implemented in plugin.py (e.g., enrich_batch)
-- Blair should implement these to pass all tests
-- Integration tests are marked with @pytest.mark.skip() until Dispatcharr is set up
-- Sports enrichment tests require enable_sports_enrichment=True and implementation
-
 Test coverage:
-- ✅ Episode parsing (S2E36 → season 2, episode 36)
-- ✅ TV show enrichment (Series/Movies)
-- ⏳ Sports enrichment (needs implementation)
-- ✅ Previously-shown flags
-- ⏳ Bulk operations (needs enrich_batch method)
-- ⏳ XMLTV output (integration tests)
+- ✅ Episode parsing (V1: S2E36 → season 2, episode 36)
+- ✅ TV show enrichment (V1: Series/Movies)
+- ✅ Previously-shown flags (V1)
+- ✅ Format string system (V2: token resolution)
+- ✅ Content classification (V2: movie/sports/news/tv routing)
+- ✅ Sports & news enrichment (V2: date-based episodes)
+- ✅ Sports title grouping (V3: regex-based title extraction)
+- ⏳ XMLTV output (integration tests, requires Dispatcharr)
 """
 
 import sys
@@ -172,124 +168,6 @@ class TestEnrichmentPlugin:
         assert plugin.dry_run_mode is False
         assert 'Series' in plugin.tv_categories
 
-
-class TestSportsEnrichment:
-    """Test sports programme enrichment with year-based seasons."""
-    
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.plugin = EnrichmentPlugin({'enable_sports_enrichment': True})
-    
-    @pytest.mark.skip(reason="Sports enrichment not yet implemented in V1")
-    def test_sports_season_from_year(self):
-        """Test that sports season is derived from start_time year."""
-        from datetime import datetime
-        
-        programme = MockProgramData(
-            custom_properties={
-                'categories': ['Soccer'],
-                'start_time': datetime(2026, 2, 28, 15, 0, 0)
-            }
-        )
-        
-        changes = self.plugin.enrich_programme(programme)
-        
-        assert changes.get('season') == 2026
-    
-    @pytest.mark.skip(reason="Requires enrich_batch method implementation")
-    def test_sports_sequential_episodes_batch(self):
-        """Test sequential episode numbering for sports in batch."""
-        from datetime import datetime
-        
-        programmes = [
-            MockProgramData(
-                custom_properties={
-                    'categories': ['Soccer'],
-                    'start_time': datetime(2026, 2, 28, 15, 0, 0)
-                }
-            ),
-            MockProgramData(
-                custom_properties={
-                    'categories': ['Soccer'],
-                    'start_time': datetime(2026, 3, 1, 15, 0, 0)
-                }
-            ),
-            MockProgramData(
-                custom_properties={
-                    'categories': ['Soccer'],
-                    'start_time': datetime(2026, 3, 2, 15, 0, 0)
-                }
-            )
-        ]
-        
-        results = self.plugin.enrich_batch(programmes)
-        
-        # Episodes should be sequential: 1, 2, 3
-        assert results[0].get('episode') == 1
-        assert results[1].get('episode') == 2
-        assert results[2].get('episode') == 3
-    
-    @pytest.mark.skip(reason="Requires enrich_batch method implementation")
-    def test_sports_separate_sequences_per_sport(self):
-        """Test that different sports maintain separate episode sequences."""
-        from datetime import datetime
-        
-        programmes = [
-            MockProgramData(
-                custom_properties={
-                    'categories': ['Soccer'],
-                    'start_time': datetime(2026, 2, 28, 15, 0, 0)
-                }
-            ),
-            MockProgramData(
-                custom_properties={
-                    'categories': ['Soccer'],
-                    'start_time': datetime(2026, 3, 1, 15, 0, 0)
-                }
-            ),
-            MockProgramData(
-                custom_properties={
-                    'categories': ['Rugby league'],
-                    'start_time': datetime(2026, 2, 28, 17, 0, 0)
-                }
-            ),
-            MockProgramData(
-                custom_properties={
-                    'categories': ['Rugby league'],
-                    'start_time': datetime(2026, 3, 1, 17, 0, 0)
-                }
-            )
-        ]
-        
-        results = self.plugin.enrich_batch(programmes)
-        
-        # Soccer: E1, E2
-        assert results[0].get('episode') == 1
-        assert results[1].get('episode') == 2
-        
-        # Rugby: E1, E2 (separate sequence)
-        assert results[2].get('episode') == 1
-        assert results[3].get('episode') == 2
-    
-    @pytest.mark.skip(reason="Sports enrichment not yet implemented in V1")
-    def test_sports_all_recognized_categories(self):
-        """Test that all sports categories are recognized."""
-        from datetime import datetime
-        
-        sports_categories = ['Sports', 'Soccer', 'Rugby league', 'Cricket', 'Baseball', 'Hockey']
-        
-        for category in sports_categories:
-            programme = MockProgramData(
-                custom_properties={
-                    'categories': [category],
-                    'start_time': datetime(2026, 2, 28, 15, 0, 0)
-                }
-            )
-            
-            changes = self.plugin.enrich_programme(programme)
-            
-            # Should have year-based season
-            assert changes.get('season') == 2026, f"Failed for category: {category}"
 
 
 class TestParsingEdgeCases:
@@ -526,73 +404,6 @@ class TestMalformedInput:
         assert 'season' not in result
         assert 'episode' not in result
 
-
-class TestBulkOperations:
-    """Test bulk enrichment operations."""
-    
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.plugin = EnrichmentPlugin()
-    
-    @pytest.mark.skip(reason="Requires enrich_batch method implementation")
-    def test_enrich_batch_100_programmes(self):
-        """Test enriching 100 programmes in batch."""
-        programmes = [
-            MockProgramData(
-                custom_properties={
-                    'categories': ['Series'],
-                    'onscreen_episode': f'S1E{i}'
-                }
-            )
-            for i in range(1, 101)
-        ]
-        
-        results = self.plugin.enrich_batch(programmes)
-        
-        assert len(results) == 100
-        # Verify all have season/episode enriched
-        for i, result in enumerate(results):
-            assert result.get('season') == 1
-            assert result.get('episode') == i + 1
-    
-    @pytest.mark.skip(reason="Requires enrich_batch method implementation")
-    def test_enrich_batch_preserves_order(self):
-        """Test that batch enrichment preserves programme order."""
-        programmes = [
-            MockProgramData(custom_properties={'categories': ['Series']}),
-            MockProgramData(custom_properties={'categories': ['Movies']}),
-            MockProgramData(custom_properties={'categories': ['Series']}),
-        ]
-        
-        results = self.plugin.enrich_batch(programmes)
-        
-        assert len(results) == 3
-        # Order should be preserved
-    
-    @pytest.mark.skip(reason="Requires enrich_batch method implementation")
-    def test_enrich_batch_empty_list(self):
-        """Test enriching empty batch."""
-        results = self.plugin.enrich_batch([])
-        
-        assert results == []
-    
-    @pytest.mark.skip(reason="Requires enrich_batch method implementation")
-    def test_enrich_batch_single_programme(self):
-        """Test enriching batch with single programme."""
-        programmes = [
-            MockProgramData(
-                custom_properties={
-                    'categories': ['Series'],
-                    'onscreen_episode': 'S2E5'
-                }
-            )
-        ]
-        
-        results = self.plugin.enrich_batch(programmes)
-        
-        assert len(results) == 1
-        assert results[0].get('season') == 2
-        assert results[0].get('episode') == 5
 
 
 class TestIntegration:
